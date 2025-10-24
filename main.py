@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import pandas as pd
 import gspread
 import requests
@@ -13,27 +12,18 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SPREADSHEET_ID = '1nMLHR6Xp5xzQjlhwXufecG1INSQS4KrHn41kqjV9Rmk'
 NOME_ABA = 'Tabela dinâmica 2'
 
-# --- (FUNÇÃO 'aguardar_horario_correto' FOI REMOVIDA) ---
-
-# --- Função de Autenticação (CORRIGIDA) ---
+# --- Função de Autenticação (Sem alteração) ---
 def autenticar_e_criar_cliente():
-    """
-    Autentica usando o Secret do GitHub e já retorna o CLIENTE gspread.
-    """
-    
+    """Autentica usando o Secret do GitHub e já retorna o CLIENTE gspread."""
     creds_json_str = os.environ.get('GCP_SA_KEY_JSON')
-    
     if not creds_json_str:
         print("❌ Erro: Variável de ambiente 'GCP_SA_KEY_JSON' não definida.")
         return None
-    
     try:
         creds_dict = json.loads(creds_json_str)
-        # --- MUDANÇA AQUI ---
-        # Esta função agora retorna o *cliente* pronto para usar.
         cliente = gspread.service_account_from_dict(creds_dict, scopes=SCOPES)
         print("✅ Cliente gspread autenticado com Service Account.")
-        return cliente # Retorna o cliente
+        return cliente
     except Exception as e:
         print(f"❌ Erro ao autenticar com Service Account: {e}")
         return None
@@ -88,40 +78,77 @@ def padronizar_doca(doca_str):
     match = re.search(r'(\d+)$', doca_str)
     return match.group(1) if match else "--"
 
-# --- Função Principal (CORRIGIDA) ---
+# --- Função Principal (COM MUDANÇAS) ---
 def main():
     print(f"🔄 Iniciando script às {datetime.utcnow().strftime('%H:%M:%S')} UTC...")
     
-    # --- MUDANÇA AQUI ---
-    # Chamamos a nova função. 'cliente' agora é o cliente, não as credenciais.
     cliente = autenticar_e_criar_cliente()
     
-    if not cliente: # Se a autenticação falhou
+    if not cliente:
         print("Encerrando script devido a falha na autenticação.")
         enviar_webhook("Falha na autenticação do Google. Verifique o Secret 'GCP_SA_KEY_JSON' e as permissões da planilha.")
         return
 
-    try:
-        # --- MUDANÇA AQUI ---
-        # A linha 'gspread.authorize()' foi REMOVIDA.
-        # Usamos o 'cliente' diretamente.
-        planilha = cliente.open_by_key(SPREADSHEET_ID)
-        aba = planilha.worksheet(NOME_ABA)
-        valores = aba.get_all_values()
-    except gspread.exceptions.APIError as e:
-        # Erro mais detalhado para permissões
+    # --- MUDANÇA AQUI: LÓGICA DE RETENTATIVA ---
+    MAX_RETRIES = 3
+    RETRY_DELAY_SECONDS = 10
+    valores = None # Inicia 'valores' como nulo
+
+    for attempt in range(1, MAX_RETRIES + 1):
         try:
-            error_json = json.loads(e.response.text)
-            error_message = error_json.get('error', {}).get('message', str(e))
-        except:
-            error_message = str(e)
-        print(f"❌ Erro na API do Google: {error_message}")
-        enviar_webhook(f"Erro na API do Google: {error_message}.\n\nVerifique se a conta de serviço (o email ...@gserviceaccount.com) tem permissão de 'Editor' na planilha.")
-        return
-    except Exception as e:
-        print(f"❌ Erro ao abrir planilha: {e}")
-        enviar_webhook(f"Erro ao abrir planilha: {e}")
-        return
+            print(f"🔄 Tentativa {attempt}/{MAX_RETRIES} de abrir a planilha...")
+            planilha = cliente.open_by_key(SPREADSHEET_ID)
+            aba = planilha.worksheet(NOME_ABA)
+            valores = aba.get_all_values()
+            
+            print("✅ Planilha aberta com sucesso.")
+            break # Se deu certo, sai do loop de tentativas
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            print(f"❌ Erro de rede (Timeout/Connection) na tentativa {attempt}: {e}")
+            if attempt == MAX_RETRIES:
+                print("Esgotadas as tentativas de rede.")
+                enviar_webhook(f"Erro de rede ao abrir planilha (esgotadas {MAX_RETRIES} tentativas): {e}")
+                return
+            print(f"Aguardando {RETRY_DELAY_SECONDS * attempt}s...")
+            time.sleep(RETRY_DELAY_SECONDS * attempt) # Espera antes de tentar de novo
+        
+        except gspread.exceptions.APIError as e:
+            # Erro 5xx (500, 503) é erro de servidor (temporário)
+            if '50' in str(e): # Pega 500, 502, 503...
+                print(f"❌ Erro de servidor Google (5xx) na tentativa {attempt}: {e}")
+                if attempt == MAX_RETRIES:
+                    enviar_webhook(f"Erro de Servidor Google (5xx) ao abrir planilha: {e}")
+                    return
+                print(f"Aguardando {RETRY_DELAY_SECONDS * attempt}s...")
+                time.sleep(RETRY_DELAY_SECONDS * attempt)
+            else:
+                # Erro 4xx (403, 404) é erro permanente (permissão, não encontrado)
+                print(f"❌ Erro de API permanente (4xx): {e}")
+                enviar_webhook(f"Erro de API permanente ao abrir planilha (Verifique permissões/ID): {e}")
+                return
+        
+        except Exception as e:
+            # Pega o erro 'RemoteDisconnected' se os outros não pegarem
+            error_str = str(e)
+            if "RemoteDisconnected" in error_str or "Connection aborted" in error_str:
+                print(f"❌ Erro de conexão (RemoteDisconnected) na tentativa {attempt}: {e}")
+                if attempt == MAX_RETRIES:
+                    enviar_webhook(f"Erro de rede (RemoteDisconnected) esgotado: {e}")
+                    return
+                print(f"Aguardando {RETRY_DELAY_SECONDS * attempt}s...")
+                time.sleep(RETRY_DELAY_SECONDS * attempt)
+            else:
+                # Outro erro inesperado
+                print(f"❌ Erro inesperado: {e}")
+                enviar_webhook(f"Erro inesperado ao abrir planilha: {e}")
+                return
+    
+    # Se o loop de tentativas terminou e 'valores' ainda é None, algo falhou
+    if valores is None:
+        print("❌ Falha ao carregar dados da planilha após todas as tentativas.")
+        return 
+    # --- FIM DA MUDANÇA ---
 
     # --- O RESTO DO SCRIPT CONTINUA IGUAL ---
     
