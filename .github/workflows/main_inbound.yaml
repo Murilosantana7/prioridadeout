@@ -1,4 +1,4 @@
-name: main 
+name: main
 
 on:
   workflow_dispatch:      # Permite execução manual
@@ -25,6 +25,11 @@ jobs:
           # (pandas, gspread, requests, google-auth)
           pip install -r requirements.txt
       
+      # --- PASSO DE DEBUG ADICIONADO ---
+      # Este passo vai mostrar todos os arquivos no seu repositório
+      - name: Listar arquivos no repositório
+        run: ls -R
+
       - name: Executar o script
         env:
           # Este é o segredo com o JSON PURO colado
@@ -32,5 +37,6 @@ jobs:
           # Não se esqueça do seu webhook
           SEATALK_WEBHOOK_URL: ${{ secrets.SEATALK_WEBHOOK_URL }} 
         
-        # Use o script que lê a variável de ambiente (o primeiro que fizemos)
+        # Você provavelmente precisará mudar o nome do arquivo 'monitor_lts.py'
+        # para o nome real que aparecer no log do passo anterior
         run: python monitor_lts.py
