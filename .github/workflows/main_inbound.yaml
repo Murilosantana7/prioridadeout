@@ -2,10 +2,7 @@ name: main
 
 on:
   workflow_dispatch:      # Permite execução manual
-  schedule:
-    # --- MUDANÇA AQUI ---
-    # Roda exatamente aos 0 e 30 minutos de cada hora (fuso UTC)
-    - cron: '0,30 * * * *' 
+  # --- O BLOCO 'schedule:' FOI REMOVIDO DAQUI ---
 
 jobs:
   run-script:
@@ -25,7 +22,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
-      - name: Listar arquivos (para debug, pode remover depois)
+      - name: Listar arquivos (para debug)
         run: ls -R
 
       - name: Executar o script
