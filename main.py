@@ -5,98 +5,50 @@ import requests
 from datetime import datetime, timedelta, time as dt_time
 import re
 import time
-import os  # Necessário para ler os segredos
-import json # Necessário para ler o JSON do segredo
+import os
+import json
 
 # --- Constantes do Script ---
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SPREADSHEET_ID = '1nMLHR6Xp5xzQjlhwXufecG1INSQS4KrHn41kqjV9Rmk'
 NOME_ABA = 'Tabela dinâmica 2'
-# URLs são lidas dos segredos do GitHub, não são mais constantes aqui.
 
-# --- Função de Espera (Ajustada para UTC - Horário do GitHub) ---
-def aguardar_horario_correto():
-    """
-    Verifica se é hora cheia (XX:00) ou meia hora (XX:30) no fuso UTC.
-    Se não for, aguarda até o próximo intervalo de 30 segundos.
-    """
-    print(f"Iniciando verificação de horário às {datetime.utcnow().strftime('%H:%M:%S')} (Fuso UTC do GitHub)")
-    
-    while True:
-        # Usando UTC (horário do servidor do GitHub)
-        agora_utc = datetime.utcnow()
-        minutos_atuais = agora_utc.minute
-        
-        # Verifica se é hora cheia (00) ou meia hora (30)
-        if minutos_atuais == 0 or minutos_atuais == 30:
-            print(f"✅ Horário correto detectado: {agora_utc.strftime('%H:%M:%S')} UTC")
-            print("Iniciando execução do código...")
-            break
-        else:
-            # Calcula quanto tempo falta para o próximo horário válido
-            if minutos_atuais < 30:
-                minutos_faltando = 30 - minutos_atuais
-                proximo_horario_str = f"{agora_utc.hour:02d}:30"
-            else:
-                minutos_faltando = 60 - minutos_atuais
-                proxima_hora = (agora_utc.hour + 1) % 24
-                proximo_horario_str = f"{proxima_hora:02d}:00"
-            
-            # Espera de forma mais inteligente: apenas até o próximo :00 ou :30
-            segundos_para_o_proximo_check = 30 - (agora_utc.second % 30)
-            
-            print(f"⏳ Horário atual: {agora_utc.strftime('%H:%M:%S')} UTC")
-            print(f"   Aguardando até {proximo_horario_str} (faltam ~{minutos_faltando} min)")
-            print(f"   Próxima verificação em {segundos_para_o_proximo_check} segundos...")
-            
-            time.sleep(segundos_para_o_proximo_check)
+# --- (FUNÇÃO 'aguardar_horario_correto' FOI REMOVIDA) ---
 
-# --- Função de Autenticação (Versão CORRETA para GitHub Actions) ---
-def autenticar():
-    """Autentica usando uma Conta de Serviço a partir de um Secret do GitHub."""
+# --- Função de Autenticação (CORRIGIDA) ---
+def autenticar_e_criar_cliente():
+    """
+    Autentica usando o Secret do GitHub e já retorna o CLIENTE gspread.
+    """
     
-    # Pega o conteúdo do arquivo JSON da variável de ambiente
     creds_json_str = os.environ.get('GCP_SA_KEY_JSON')
     
     if not creds_json_str:
         print("❌ Erro: Variável de ambiente 'GCP_SA_KEY_JSON' não definida.")
-        print("   Verifique os 'Secrets' do seu repositório no GitHub.")
         return None
     
     try:
-        # Converte a string JSON em um dicionário
         creds_dict = json.loads(creds_json_str)
-        
-        # Autentica no gspread usando o dicionário
-        creds = gspread.service_account_from_dict(creds_dict, scopes=SCOPES)
-        print("✅ Autenticado com Service Account via GitHub Secret.")
-        return creds
-    except json.JSONDecodeError:
-        print("❌ Erro: Falha ao decodificar o JSON das credenciais. Verifique o GitHub Secret.")
-        return None
+        # --- MUDANÇA AQUI ---
+        # Esta função agora retorna o *cliente* pronto para usar.
+        cliente = gspread.service_account_from_dict(creds_dict, scopes=SCOPES)
+        print("✅ Cliente gspread autenticado com Service Account.")
+        return cliente # Retorna o cliente
     except Exception as e:
         print(f"❌ Erro ao autenticar com Service Account: {e}")
         return None
 
-# --- Função de Webhook (Versão CORRETA para GitHub Actions) ---
+# --- Função de Webhook (Sem alteração) ---
 def enviar_webhook(mensagem_txt):
     """Envia a mensagem de texto lendo a URL do Secret do GitHub."""
-    
-    # Pega a URL do webhook da variável de ambiente
     webhook_url = os.environ.get('SEATALK_WEBHOOK_URL') 
-    
     if not webhook_url:
-        print("❌ Erro: Variável de ambiente 'SEATALK_WEBHOOK_URL' não definida.")
-        print("   Verifique os 'Secrets' do seu repositório no GitHub.")
-        return # Não tenta enviar a mensagem se a URL estiver faltando
-
+        print("❌ Erro: Variável 'SEATALK_WEBHOOK_URL' não definida.")
+        return
     try:
         payload = {
             "tag": "text",
-            "text": {
-                "format": 1,
-                "content": f"```\n{mensagem_txt}\n```"
-            }
+            "text": { "format": 1, "content": f"```\n{mensagem_txt}\n```" }
         }
         response = requests.post(webhook_url, json=payload)
         response.raise_for_status()
@@ -105,21 +57,16 @@ def enviar_webhook(mensagem_txt):
         print(f"❌ Erro ao enviar mensagem para o webhook: {err}")
 
 # --- Funções Originais do Script (Sem Alteração) ---
-
 def minutos_para_hhmm(minutos):
     horas = minutos // 60
     mins = minutos % 60
     return f"{horas:02d}:{mins:02d}h"
 
 def turno_atual():
-    # Nota: O turno será baseado no horário UTC do servidor
     agora = datetime.utcnow().time()
-    if agora >= dt_time(6, 0) and agora < dt_time(14, 0):
-        return "T1"
-    elif agora >= dt_time(14, 0) and agora < dt_time(22, 0):
-        return "T2"
-    else:
-        return "T3"
+    if agora >= dt_time(6, 0) and agora < dt_time(14, 0): return "T1"
+    elif agora >= dt_time(14, 0) and agora < dt_time(22, 0): return "T2"
+    else: return "T3"
 
 def ordenar_turnos(pendentes_por_turno):
     ordem_turnos = ['T1', 'T2', 'T3']
@@ -139,40 +86,45 @@ def periodo_dia_customizado(agora_utc):
 
 def padronizar_doca(doca_str):
     match = re.search(r'(\d+)$', doca_str)
-    if match:
-        return match.group(1)
-    else:
-        return "--"
+    return match.group(1) if match else "--"
 
-# --- Função Principal (Modificada para GitHub Actions) ---
+# --- Função Principal (CORRIGIDA) ---
 def main():
-    print("🔄 Iniciando script...")
-    creds = autenticar() # Chama a nova função de autenticação
+    print(f"🔄 Iniciando script às {datetime.utcnow().strftime('%H:%M:%S')} UTC...")
     
-    if not creds:
+    # --- MUDANÇA AQUI ---
+    # Chamamos a nova função. 'cliente' agora é o cliente, não as credenciais.
+    cliente = autenticar_e_criar_cliente()
+    
+    if not cliente: # Se a autenticação falhou
         print("Encerrando script devido a falha na autenticação.")
-        # Tenta enviar um aviso (usando a nova função de webhook)
         enviar_webhook("Falha na autenticação do Google. Verifique o Secret 'GCP_SA_KEY_JSON' e as permissões da planilha.")
         return
 
     try:
-        cliente = gspread.authorize(creds)
+        # --- MUDANÇA AQUI ---
+        # A linha 'gspread.authorize()' foi REMOVIDA.
+        # Usamos o 'cliente' diretamente.
         planilha = cliente.open_by_key(SPREADSHEET_ID)
         aba = planilha.worksheet(NOME_ABA)
         valores = aba.get_all_values()
-    except gspread.exceptions.SpreadsheetNotFound:
-        print("❌ Erro: Planilha não encontrada. Verifique o SPREADSHEET_ID.")
-        enviar_webhook("Erro no script: Planilha não encontrada. Verifique o SPREADSHEET_ID.")
-        return
-    except gspread.exceptions.WorksheetNotFound:
-        print(f"❌ Erro: Aba '{NOME_ABA}' não encontrada.")
-        enviar_webhook(f"Erro no script: Aba '{NOME_ABA}' não encontrada na planilha.")
+    except gspread.exceptions.APIError as e:
+        # Erro mais detalhado para permissões
+        try:
+            error_json = json.loads(e.response.text)
+            error_message = error_json.get('error', {}).get('message', str(e))
+        except:
+            error_message = str(e)
+        print(f"❌ Erro na API do Google: {error_message}")
+        enviar_webhook(f"Erro na API do Google: {error_message}.\n\nVerifique se a conta de serviço (o email ...@gserviceaccount.com) tem permissão de 'Editor' na planilha.")
         return
     except Exception as e:
         print(f"❌ Erro ao abrir planilha: {e}")
         enviar_webhook(f"Erro ao abrir planilha: {e}")
         return
 
+    # --- O RESTO DO SCRIPT CONTINUA IGUAL ---
+    
     df = pd.DataFrame(valores[1:], columns=valores[0])
     df.columns = df.columns.str.strip()
     
@@ -182,14 +134,11 @@ def main():
         header_chegada_lt = valores[0][3].strip()    # Coluna D
         NOME_COLUNA_PACOTES = valores[0][5].strip()  # Coluna F
     except IndexError as e:
-        print(f"❌ Erro: A planilha não tem colunas suficientes (pelo menos até a Coluna AC). Detalhe: {e}")
-        enviar_webhook(f"Erro no script: A planilha não tem colunas suficientes (pelo menos até a Coluna AC).")
+        print(f"❌ Erro: A planilha não tem colunas suficientes. Detalhe: {e}")
+        enviar_webhook(f"Erro no script: A planilha não tem colunas suficientes.")
         return
         
-    print(f"INFO: Usando Coluna B ('{header_eta_planejado}') para ETA.")
-    print(f"INFO: Usando Coluna AC ('{header_origem}') para Origem.")
-    print(f"INFO: Usando Coluna D ('{header_chegada_lt}') para Chegada LT.")
-    print(f"INFO: Usando Coluna F ('{NOME_COLUNA_PACOTES}') para Pacotes.")
+    print("INFO: Colunas de dados localizadas.")
     
     required_cols = [
         'LH Trip Nnumber', 'Satus 2.0', 'Add to Queue Time', 'Doca', 'Turno 2', 
@@ -200,11 +149,9 @@ def main():
         if col not in df.columns:
             if col == 'ETA Planejado' and header_eta_planejado != col:
                  df.rename(columns={header_eta_planejado: 'ETA Planejado'}, inplace=True)
-                 print(f"AVISO: Renomeando '{header_eta_planejado}' para 'ETA Planejado' internamente.")
                  continue 
             print(f"❌ Coluna obrigatória '{col}' não encontrada no DataFrame.")
-            print(f"   Colunas encontradas: {list(df.columns)}")
-            enviar_webhook(f"Erro no script: Coluna obrigatória '{col}' não foi encontrada na planilha.")
+            enviar_webhook(f"Erro no script: Coluna obrigatória '{col}' não foi encontrada.")
             return
             
     if header_eta_planejado != 'ETA Planejado':
@@ -223,7 +170,7 @@ def main():
     df['Satus 2.0'] = df['Satus 2.0'].replace({'Pendente Recepção': 'pendente recepção', 'Pendente De Chegada': 'pendente de chegada'})
     df = df[~df['Satus 2.0'].str.lower().str.contains('finalizado', na=False)]
 
-    agora_utc = datetime.utcnow() # Usar UTC
+    agora_utc = datetime.utcnow()
     inicio_dia, fim_dia = periodo_dia_customizado(agora_utc)
     print(f"Intervalo considerado para pendentes (UTC): {inicio_dia} até {fim_dia}")
 
@@ -287,10 +234,6 @@ def main():
 
 
 if __name__ == '__main__':
-    # 1. Aguarda o horário correto (em UTC)
-    aguardar_horario_correto()
-    
-    # 2. Roda a lógica principal
     try:
         main()
     except Exception as e:
