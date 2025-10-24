@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pandas as pd
 import gspread
 import requests
@@ -11,6 +12,43 @@ import json
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SPREADSHEET_ID = '1nMLHR6Xp5xzQjlhwXufecG1INSQS4KrHn41kqjV9Rmk'
 NOME_ABA = 'Tabela dinâmica 2'
+
+# --- FUNÇÃO DE ESPERA RE-ADICIONADA ---
+def aguardar_horario_correto():
+    """
+    Verifica se é hora cheia (XX:00) ou meia hora (XX:30) no fuso UTC.
+    Se não for, aguarda até o próximo intervalo de 30 segundos.
+    """
+    print(f"Iniciando verificação de horário às {datetime.utcnow().strftime('%H:%M:%S')} (Fuso UTC do GitHub)")
+    
+    while True:
+        # Usando UTC (horário do servidor do GitHub)
+        agora_utc = datetime.utcnow()
+        minutos_atuais = agora_utc.minute
+        
+        # Verifica se é hora cheia (00) ou meia hora (30)
+        if minutos_atuais == 0 or minutos_atuais == 30:
+            print(f"✅ Horário correto detectado: {agora_utc.strftime('%H:%M:%S')} UTC")
+            print("Iniciando execução (coleta de dados)...")
+            break # Libera a execução
+        else:
+            # Calcula quanto tempo falta
+            if minutos_atuais < 30:
+                minutos_faltando = 30 - minutos_atuais
+                proximo_horario_str = f"{agora_utc.hour:02d}:30"
+            else:
+                minutos_faltando = 60 - minutos_atuais
+                proxima_hora = (agora_utc.hour + 1) % 24
+                proximo_horario_str = f"{proxima_hora:02d}:00"
+            
+            # Espera de forma mais inteligente: apenas até o próximo :00 ou :30
+            segundos_para_o_proximo_check = 30 - (agora_utc.second % 30)
+            
+            print(f"⏳ Horário atual: {agora_utc.strftime('%H:%M:%S')} UTC")
+            print(f"   Aguardando o 'portão' abrir às {proximo_horario_str} (faltam ~{minutos_faltando} min)")
+            print(f"   Próxima verificação em {segundos_para_o_proximo_check} segundos...")
+            
+            time.sleep(segundos_para_o_proximo_check)
 
 # --- Função de Autenticação (Sem alteração) ---
 def autenticar_e_criar_cliente():
@@ -78,9 +116,9 @@ def padronizar_doca(doca_str):
     match = re.search(r'(\d+)$', doca_str)
     return match.group(1) if match else "--"
 
-# --- Função Principal (COM MUDANÇAS) ---
+# --- Função Principal (Com lógica de retry) ---
 def main():
-    print(f"🔄 Iniciando script às {datetime.utcnow().strftime('%H:%M:%S')} UTC...")
+    print(f"🔄 Script 'main' iniciado.")
     
     cliente = autenticar_e_criar_cliente()
     
@@ -89,10 +127,9 @@ def main():
         enviar_webhook("Falha na autenticação do Google. Verifique o Secret 'GCP_SA_KEY_JSON' e as permissões da planilha.")
         return
 
-    # --- MUDANÇA AQUI: LÓGICA DE RETENTATIVA ---
     MAX_RETRIES = 3
     RETRY_DELAY_SECONDS = 10
-    valores = None # Inicia 'valores' como nulo
+    valores = None
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -100,22 +137,17 @@ def main():
             planilha = cliente.open_by_key(SPREADSHEET_ID)
             aba = planilha.worksheet(NOME_ABA)
             valores = aba.get_all_values()
-            
             print("✅ Planilha aberta com sucesso.")
-            break # Se deu certo, sai do loop de tentativas
-
+            break 
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             print(f"❌ Erro de rede (Timeout/Connection) na tentativa {attempt}: {e}")
             if attempt == MAX_RETRIES:
-                print("Esgotadas as tentativas de rede.")
                 enviar_webhook(f"Erro de rede ao abrir planilha (esgotadas {MAX_RETRIES} tentativas): {e}")
                 return
             print(f"Aguardando {RETRY_DELAY_SECONDS * attempt}s...")
-            time.sleep(RETRY_DELAY_SECONDS * attempt) # Espera antes de tentar de novo
-        
+            time.sleep(RETRY_DELAY_SECONDS * attempt)
         except gspread.exceptions.APIError as e:
-            # Erro 5xx (500, 503) é erro de servidor (temporário)
-            if '50' in str(e): # Pega 500, 502, 503...
+            if '50' in str(e):
                 print(f"❌ Erro de servidor Google (5xx) na tentativa {attempt}: {e}")
                 if attempt == MAX_RETRIES:
                     enviar_webhook(f"Erro de Servidor Google (5xx) ao abrir planilha: {e}")
@@ -123,13 +155,10 @@ def main():
                 print(f"Aguardando {RETRY_DELAY_SECONDS * attempt}s...")
                 time.sleep(RETRY_DELAY_SECONDS * attempt)
             else:
-                # Erro 4xx (403, 404) é erro permanente (permissão, não encontrado)
                 print(f"❌ Erro de API permanente (4xx): {e}")
                 enviar_webhook(f"Erro de API permanente ao abrir planilha (Verifique permissões/ID): {e}")
                 return
-        
         except Exception as e:
-            # Pega o erro 'RemoteDisconnected' se os outros não pegarem
             error_str = str(e)
             if "RemoteDisconnected" in error_str or "Connection aborted" in error_str:
                 print(f"❌ Erro de conexão (RemoteDisconnected) na tentativa {attempt}: {e}")
@@ -139,18 +168,13 @@ def main():
                 print(f"Aguardando {RETRY_DELAY_SECONDS * attempt}s...")
                 time.sleep(RETRY_DELAY_SECONDS * attempt)
             else:
-                # Outro erro inesperado
                 print(f"❌ Erro inesperado: {e}")
                 enviar_webhook(f"Erro inesperado ao abrir planilha: {e}")
                 return
     
-    # Se o loop de tentativas terminou e 'valores' ainda é None, algo falhou
     if valores is None:
         print("❌ Falha ao carregar dados da planilha após todas as tentativas.")
         return 
-    # --- FIM DA MUDANÇA ---
-
-    # --- O RESTO DO SCRIPT CONTINUA IGUAL ---
     
     df = pd.DataFrame(valores[1:], columns=valores[0])
     df.columns = df.columns.str.strip()
@@ -261,6 +285,11 @@ def main():
 
 
 if __name__ == '__main__':
+    # --- MUDANÇA AQUI ---
+    # 1. A função de 'aguardar' é chamada primeiro.
+    aguardar_horario_correto()
+    
+    # 2. Roda a lógica principal DEPOIS que o portão liberar.
     try:
         main()
     except Exception as e:
