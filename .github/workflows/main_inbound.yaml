@@ -2,7 +2,11 @@ name: main
 
 on:
   workflow_dispatch:      # Permite execução manual
-  # --- O BLOCO 'schedule:' FOI REMOVIDO DAQUI ---
+  
+  # --- BLOCO DE AGENDAMENTO REATIVADO ---
+  schedule:
+    # Roda exatamente aos 0 e 30 minutos de cada hora (fuso UTC)
+    - cron: '0,30 * * * *' 
 
 jobs:
   run-script:
