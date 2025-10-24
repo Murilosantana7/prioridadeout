@@ -3,10 +3,10 @@ name: main
 on:
   workflow_dispatch:      # Permite execução manual
   
-  # --- BLOCO DE AGENDAMENTO REATIVADO ---
   schedule:
-    # Roda exatamente aos 0 e 30 minutos de cada hora (fuso UTC)
-    - cron: '0,30 * * * *' 
+    # "Acorda" o script 8 minutos antes da hora cheia e meia hora.
+    # (Inicia 18:22, para o script "esperar no portão" até 18:30)
+    - cron: '22,52 * * * *' 
 
 jobs:
   run-script:
@@ -26,9 +26,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
-      - name: Listar arquivos (para debug)
-        run: ls -R
-
       - name: Executar o script
         env:
           GCP_SA_KEY_JSON: ${{ secrets.GCP_SA_KEY_JSON }} 
