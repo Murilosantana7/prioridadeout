@@ -13,7 +13,7 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SPREADSHEET_ID = '1nMLHR6Xp5xzQjlhwXufecG1INSQS4KrHn41kqjV9Rmk'
 NOME_ABA = 'Tabela dinâmica 2'
 
-# --- FUNÇÃO DE ESPERA RE-ADICIONADA ---
+# --- FUNÇÃO DE ESPERA ("O PORTÃO") ---
 def aguardar_horario_correto():
     """
     Verifica se é hora cheia (XX:00) ou meia hora (XX:30) no fuso UTC.
@@ -28,8 +28,8 @@ def aguardar_horario_correto():
         
         # Verifica se é hora cheia (00) ou meia hora (30)
         if minutos_atuais == 0 or minutos_atuais == 30:
-            print(f"✅ Horário correto detectado: {agora_utc.strftime('%H:%M:%S')} UTC")
-            print("Iniciando execução (coleta de dados)...")
+            print(f"✅ 'Portão' aberto: {agora_utc.strftime('%H:%M:%S')} UTC")
+            print("Iniciando coleta de dados...")
             break # Libera a execução
         else:
             # Calcula quanto tempo falta
@@ -41,7 +41,7 @@ def aguardar_horario_correto():
                 proxima_hora = (agora_utc.hour + 1) % 24
                 proximo_horario_str = f"{proxima_hora:02d}:00"
             
-            # Espera de forma mais inteligente: apenas até o próximo :00 ou :30
+            # Espera de forma inteligente
             segundos_para_o_proximo_check = 30 - (agora_utc.second % 30)
             
             print(f"⏳ Horário atual: {agora_utc.strftime('%H:%M:%S')} UTC")
@@ -50,7 +50,7 @@ def aguardar_horario_correto():
             
             time.sleep(segundos_para_o_proximo_check)
 
-# --- Função de Autenticação (Sem alteração) ---
+# --- Função de Autenticação (Com 'retry' embutido) ---
 def autenticar_e_criar_cliente():
     """Autentica usando o Secret do GitHub e já retorna o CLIENTE gspread."""
     creds_json_str = os.environ.get('GCP_SA_KEY_JSON')
@@ -177,7 +177,7 @@ def main():
         return 
     
     df = pd.DataFrame(valores[1:], columns=valores[0])
-    df.columns = df.columns.str.strip()
+    df.columns = [col.strip() for col in df.columns] # Limpa espaços nos nomes das colunas
     
     try:
         header_eta_planejado = valores[0][1].strip() # Coluna B
@@ -198,10 +198,22 @@ def main():
     
     for col in required_cols:
         if col not in df.columns:
+            # Tenta encontrar a coluna mesmo com espaços extras
+            col_encontrada = False
+            for df_col in df.columns:
+                if df_col.strip() == col:
+                    col_encontrada = True
+                    break
+            
+            if col_encontrada:
+                continue
+
             if col == 'ETA Planejado' and header_eta_planejado != col:
                  df.rename(columns={header_eta_planejado: 'ETA Planejado'}, inplace=True)
                  continue 
+            
             print(f"❌ Coluna obrigatória '{col}' não encontrada no DataFrame.")
+            print(f"   Colunas encontradas: {list(df.columns)}")
             enviar_webhook(f"Erro no script: Coluna obrigatória '{col}' não foi encontrada.")
             return
             
@@ -221,7 +233,8 @@ def main():
     df['Satus 2.0'] = df['Satus 2.0'].replace({'Pendente Recepção': 'pendente recepção', 'Pendente De Chegada': 'pendente de chegada'})
     df = df[~df['Satus 2.0'].str.lower().str.contains('finalizado', na=False)]
 
-    agora_utc = datetime.utcnow()
+    # Usa a hora exata que o portão abriu para garantir consistência
+    agora_utc = datetime.utcnow().replace(second=0, microsecond=0) 
     inicio_dia, fim_dia = periodo_dia_customizado(agora_utc)
     print(f"Intervalo considerado para pendentes (UTC): {inicio_dia} até {fim_dia}")
 
