@@ -3,7 +3,9 @@ name: main
 on:
   workflow_dispatch:      # Permite execução manual
   schedule:
-    - cron: '*/15 * * * *' # Roda a cada 15 min (UTC)
+    # --- MUDANÇA AQUI ---
+    # Roda exatamente aos 0 e 30 minutos de cada hora (fuso UTC)
+    - cron: '0,30 * * * *' 
 
 jobs:
   run-script:
@@ -23,15 +25,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       
-      # Este passo não é mais necessário, mas não faz mal deixá-lo
-      - name: Listar arquivos no repositório
+      - name: Listar arquivos (para debug, pode remover depois)
         run: ls -R
 
       - name: Executar o script
         env:
           GCP_SA_KEY_JSON: ${{ secrets.GCP_SA_KEY_JSON }} 
           SEATALK_WEBHOOK_URL: ${{ secrets.SEATALK_WEBHOOK_URL }} 
-        
-        # --- CORREÇÃO AQUI ---
-        # Trocamos 'monitor_lts.py' pelo nome correto: 'main.py'
         run: python main.py
