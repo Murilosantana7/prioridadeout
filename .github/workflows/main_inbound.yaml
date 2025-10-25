@@ -2,11 +2,6 @@ name: main
 
 on:
   workflow_dispatch:      # Permite execução manual
-  
-  schedule:
-    # "Acorda" o script 8 minutos antes da hora cheia e meia hora.
-    # (Inicia 18:22, para o script "esperar no portão" até 18:30)
-    - cron: '22,52 * * * *' 
 
 jobs:
   run-script:
