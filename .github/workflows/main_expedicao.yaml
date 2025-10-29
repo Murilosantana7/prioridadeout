@@ -26,22 +26,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # --- ETAPA DE DEBUG (Versão Corrigida) ---
-      # Esta etapa vai nos mostrar o que está salvo no segredo
-      - name: 4a. DEBUG - Mostra o início do segredo
-        run: |
-          echo "Debug: Verificando o início do segredo..."
-          SECRET_PREVIEW=$(echo "${{ secrets.GOOGLE_CREDENTIALS }}" | cut -c1-20)
-          echo "O segredo começa com: $SECRET_PREVIEW..."
+      # NÃO PRECISA MAIS DE BASE64!
+      # A autenticação é feita dentro do Python
 
-      - name: 4b. Criar arquivo de credenciais do Google
-        # Pega a string Base64, decodifica, e salva o JSON original
-        run: printf '%s' "${{ secrets.GOOGLE_CREDENTIALS }}" | base64 --decode > credentials.json
-
-      - name: 5. Rodar o Script Python
-        # O script agora usará o credentials.json local
+      - name: 4. Rodar o Script Python
+        # Passa todos os segredos necessários como variáveis de ambiente
         run: python main.py 
-        
         env:
+          # O script usa este para autenticar
+          GCP_SA_KEY_JSON: ${{ secrets.GCP_SA_KEY_JSON }} 
+          
+          # O script usa este para o webhook
+          SEATALK_WEBHOOK_URL: ${{ secrets.SEATALK_WEBHOOK_URL }} 
+          
+          # O script usa este para abrir a planilha
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-          SEATALK_WEBHOOK_URL: ${{ secrets.SEATALK_WEBHOOK_URL }}
