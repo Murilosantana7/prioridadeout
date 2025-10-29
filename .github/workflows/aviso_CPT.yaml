@@ -2,8 +2,8 @@ name: Fiscal CPT Iminente
 
 on:
   schedule:
-    - cron: '*/10 * * * *'   # ← RODA A CADA 10 MINUTOS (0, 10, 20, 30, 40, 50)
-  workflow_dispatch: {}       # ← Permite execução manual pelo botão "Run workflow"
+    - cron: '*/10 * * * *'   # ← RODA A CADA 10 MINUTOS
+  workflow_dispatch: {}       # ← Permite execução manual
 
 jobs:
   run-fiscal-script:
@@ -11,6 +11,11 @@ jobs:
     steps:
       - name: 📂 Checkout do código
         uses: actions/checkout@v4
+
+      - name: 🔍 Debug - Listar arquivos (opcional, mas útil para evitar erros)
+        run: |
+          echo "📂 Arquivos no diretório:"
+          ls -la
 
       - name: 🐍 Configurar Python 3.10
         uses: actions/setup-python@v5
@@ -23,7 +28,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: 🚨 Rodar script de fiscalização de CPT
-        run: main.py
+        run: python main.py     # ← ALTERADO PARA main.py
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
