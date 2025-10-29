@@ -1,12 +1,9 @@
 name: Robô Expedição
 
 on:
-  # Permite rodar manualmente pelo GitHub
   workflow_dispatch: {}
-  
-  # Define um agendamento (a cada hora, no minuto 0)
   schedule:
-    - cron: '0 * * * *' 
+    - cron: '0 * * * *'
 
 jobs:
   run-expedicao-script:
@@ -26,16 +23,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # NÃO PRECISA MAIS DE DEBUG OU 'printf | base64 --decode'
-      # A decodificação será feita DENTRO do Python
-
       - name: 4. Rodar o Script Python
-        # Passa todos os segredos necessários como variáveis de ambiente
         run: python main.py 
         env:
-          # O script usará este segredo Base64 para autenticar
-          GCP_SA_KEY_BASE64: ${{ secrets.GCP_SA_KEY_BASE64 }} 
-          
-          # Os outros dois segredos continuam iguais
+          # ✅ Nome correto — indica que é JSON, não base64
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           SEATALK_WEBHOOK_URL: ${{ secrets.SEATALK_WEBHOOK_URL }} 
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
