@@ -28,8 +28,9 @@ jobs:
 
       # --- ETAPA DE DEBUG ---
       # Esta etapa vai nos mostrar o que está salvo no segredo
+      # --- CORREÇÃO: Adicionadas aspas simples em volta do comando ---
       - name: 4a. DEBUG - Mostra o início do segredo
-        run: echo "O segredo começa com: ${{ secrets.GOOGLE_CREDENTIALS | slice: 0, 20 }}..."
+        run: 'echo "O segredo começa com: ${{ secrets.GOOGLE_CREDENTIALS | slice: 0, 20 }}..."'
 
       - name: 4b. Criar arquivo de credenciais do Google
         # Pega a string Base64, decodifica, e salva o JSON original
