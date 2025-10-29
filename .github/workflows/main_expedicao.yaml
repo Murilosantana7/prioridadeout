@@ -1,7 +1,7 @@
 name: Robô Expedição
 
 on:
-  # Permite rodar manually pelo GitHub
+  # Permite rodar manualmente pelo GitHub
   workflow_dispatch: {}
   
   # Define um agendamento (a cada hora, no minuto 0)
@@ -31,14 +31,14 @@ jobs:
         # Esta é a etapa "mágica":
         # Ela pega o segredo GOOGLE_CREDENTIALS e o salva em um 
         # arquivo temporário chamado credentials.json no runner
-        run: echo "${{ secrets.GOOGLE_CREDENTIALS }}" > credentials.json
+        
+        # --- CORREÇÃO AQUI ---
+        # Trocado 'echo' por 'printf' para evitar corromper o JSON
+        run: printf '%s' "${{ secrets.GOOGLE_CREDENTIALS }}" > credentials.json
 
       - name: 5. Rodar o Script Python
         # O script agora usará o credentials.json local
         # e as variáveis de ambiente para os outros segredos
-        
-        # !!!! CORREÇÃO NECESSÁRIA AQUI !!!!
-        # !!!! TROQUE 'NOME_DO_SEU_SCRIPT.py' PELO NOME DO SEU ARQUIVO !!!!
         run: python main.py 
         
         env:
