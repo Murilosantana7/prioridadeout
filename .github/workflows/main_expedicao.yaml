@@ -26,15 +26,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 4. Criar arquivo de credenciais do Google
-        # --- ESTA É A CORREÇÃO DEFINITIVA ---
+      # --- ETAPA DE DEBUG ---
+      # Esta etapa vai nos mostrar o que está salvo no segredo
+      - name: 4a. DEBUG - Mostra o início do segredo
+        run: echo "O segredo começa com: ${{ secrets.GOOGLE_CREDENTIALS | slice: 0, 20 }}..."
+
+      - name: 4b. Criar arquivo de credenciais do Google
         # Pega a string Base64, decodifica, e salva o JSON original
-        # Trocado 'echo' por 'printf' para evitar quebra de linha extra
         run: printf '%s' "${{ secrets.GOOGLE_CREDENTIALS }}" | base64 --decode > credentials.json
 
       - name: 5. Rodar o Script Python
         # O script agora usará o credentials.json local
-        # e as variáveis de ambiente para os outros segredos
         run: python main.py 
         
         env:
