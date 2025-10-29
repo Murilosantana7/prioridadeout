@@ -1,6 +1,6 @@
 import pandas as pd
 import gspread
-import requests  # ← Voltamos ao requests (já instalado!)
+import requests
 import time
 from datetime import datetime, timedelta
 from pytz import timezone
@@ -11,7 +11,6 @@ import json
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 NOME_ABA = 'Base Pending Tratado'
 INTERVALO = 'A:F'
-MINUTOS_ALERTA = [30, 20, 10]
 USER_ID_LUIS = "1508081817"  # ← ID DO LUIS TIBÉRIO
 
 
@@ -77,48 +76,53 @@ def montar_mensagem_alerta(df):
 
     df = df.copy()
     df['minutos_restantes'] = ((df['CPT'] - agora).dt.total_seconds() // 60).astype(int)
-    df_filtrado = df[df['minutos_restantes'].isin(MINUTOS_ALERTA)]
+
+    # FILTRO: todas as LTs que estão nas próximas 4h (0 a 240 minutos)
+    df_filtrado = df[(df['minutos_restantes'] >= 0) & (df['minutos_restantes'] <= 240)]
 
     if df_filtrado.empty:
         return None
 
-    mensagens = []
-    for minuto in sorted(MINUTOS_ALERTA, reverse=True):
-        grupo = df_filtrado[df_filtrado['minutos_restantes'] == minuto]
-        if not grupo.empty:
-            mensagens.append(f"⚠️ Atenção!!!")
-            mensagens.append(f"{minuto}min para o CPT.\n")
-            for _, row in grupo.iterrows():
-                lt = row['LH Trip Number'].strip()
-                destino = row['Station Name'].strip()
-                doca = formatar_doca(row['Doca'])
-                cpt_str = row['CPT'].strftime('%H:%M')
-                mensagens.append(f"🚛 {lt} | {doca} | Destino: {destino} | CPT: {cpt_str}")
-            mensagens.append("")
+    mensagens = ["📋 LISTA DE LTs NAS PRÓXIMAS 4H\n"]
 
-    if mensagens and mensagens[-1] == "":
-        mensagens.pop()
+    # Ordena por CPT (mais cedo primeiro)
+    df_filtrado = df_filtrado.sort_values('CPT')
+
+    for _, row in df_filtrado.iterrows():
+        lt = row['LH Trip Number'].strip()
+        destino = row['Station Name'].strip()
+        doca = formatar_doca(row['Doca'])
+        cpt_str = row['CPT'].strftime('%H:%M')
+        minutos = int(row['minutos_restantes'])
+
+        if minutos <= 10:
+            icone = "❗️"
+        elif minutos <= 30:
+            icone = "⚠️"
+        else:
+            icone = "✅"
+
+        mensagens.append(f"{icone} {lt} | {doca} | Destino: {destino} | CPT: {cpt_str} | Faltam {minutos} min")
 
     return "\n".join(mensagens)
 
 
 def enviar_webhook_com_mencao(mensagem_texto: str, webhook_url: str, user_id: str = "1508081817"):
     """
-    Envia mensagem com menção REAL pelo ID, usando requests (SEM httpx).
+    Envia mensagem com menção REAL pelo ID, usando requests.
     """
     if not webhook_url:
         print("❌ WEBHOOK_URL não definida.")
         return
 
-    # Texto base com tag <at>
     texto_base = "🚨 ALERTA DE CPT IMINENTE<at id=\"{user_id}\"></at>"
     mensagem_completa = f"{texto_base}\n\n{mensagem_texto}"
-    offset = len("🚨 ALERTA DE CPT IMINENTE")  # Calcula posição da tag
+    offset = len("🚨 ALERTA DE CPT IMINENTE")  # Calcula automaticamente
 
     payload = {
         "tag": "text",
         "text": {
-            "format": 2,  # ← OBRIGATÓRIO para marcações
+            "format": 2,
             "content": mensagem_completa.format(user_id=user_id),
             "at_list": [
                 {
@@ -160,7 +164,7 @@ def main():
     if mensagem:
         enviar_webhook_com_mencao(mensagem, webhook_url, USER_ID_LUIS)
     else:
-        print("✅ Nenhuma LT nos critérios de alerta. Nada enviado.")
+        print("✅ Nenhuma LT nas próximas 4h. Nada enviado.")
 
 
 if __name__ == "__main__":
