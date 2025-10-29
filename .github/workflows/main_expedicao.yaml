@@ -26,18 +26,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # NÃO PRECISA MAIS DE BASE64!
-      # A autenticação é feita dentro do Python
+      # NÃO PRECISA MAIS DE DEBUG OU 'printf | base64 --decode'
+      # A decodificação será feita DENTRO do Python
 
       - name: 4. Rodar o Script Python
         # Passa todos os segredos necessários como variáveis de ambiente
         run: python main.py 
         env:
-          # O script usa este para autenticar
-          GCP_SA_KEY_JSON: ${{ secrets.GCP_SA_KEY_JSON }} 
+          # O script usará este segredo Base64 para autenticar
+          GCP_SA_KEY_BASE64: ${{ secrets.GCP_SA_KEY_BASE64 }} 
           
-          # O script usa este para o webhook
+          # Os outros dois segredos continuam iguais
           SEATALK_WEBHOOK_URL: ${{ secrets.SEATALK_WEBHOOK_URL }} 
-          
-          # O script usa este para abrir a planilha
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
