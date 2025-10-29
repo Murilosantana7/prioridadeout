@@ -1,27 +1,35 @@
 import pandas as pd
 import gspread
-from google.oauth2.service_account import Credentials
+# A linha 'Credentials' não é mais necessária
 import requests
 import time
 from datetime import datetime, timedelta
 from pytz import timezone
-import os  # Importar a biblioteca os
+import os  # Importado para ler os segredos
+import json # Importado para ler o segredo JSON
 
 # --- CONSTANTES GLOBAIS ---
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-# O caminho agora é relativo, pois o GitHub Action criará o arquivo no mesmo diretório
-SERVICE_ACCOUNT_FILE = 'credentials.json' 
+# O SPREADSHEET_ID e WEBHOOK_URL serão lidos dos segredos
 NOME_ABA = 'Base Pending Tratado'
 INTERVALO = 'A:F'
-# O SPREADSHEET_ID e o WEBHOOK_URL foram removidos daqui
+# SERVICE_ACCOUNT_FILE foi removido
 
+# --- AUTENTICAÇÃO NOVA (DO SCRIPT NOVO) ---
 def autenticar_google():
+    """Autentica usando o Secret do GitHub e já retorna o CLIENTE gspread."""
+    creds_json_str = os.environ.get('GCP_SA_KEY_JSON')
+    if not creds_json_str:
+        print("❌ Erro: Variável de ambiente 'GCP_SA_KEY_JSON' não definida.")
+        return None
     try:
-        creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-        print("✅ Credenciais autenticadas com sucesso!")
-        return creds
+        creds_dict = json.loads(creds_json_str)
+        # gspread.service_account_from_dict lida com as 'creds' e autoriza
+        cliente = gspread.service_account_from_dict(creds_dict, scopes=SCOPES)
+        print("✅ Cliente gspread autenticado com Service Account.")
+        return cliente
     except Exception as e:
-        print(f"⚠️ Erro na autenticação: {e}")
+        print(f"❌ Erro ao autenticar com Service Account: {e}")
         return None
 
 def identificar_turno(hora):
@@ -32,16 +40,15 @@ def identificar_turno(hora):
     else:
         return "Turno 3"
 
-# Adaptado para receber o spreadsheet_id como argumento
-def obter_dados_expedicao(spreadsheet_id):
-    creds = autenticar_google()
-    if not creds:
-        return None, "⚠️ Não foi possível autenticar as credenciais."
+# --- MODIFICADO ---
+def obter_dados_expedicao(cliente, spreadsheet_id):
+    # Não precisa mais de 'creds', já recebe o 'cliente' pronto
+    if not cliente:
+        return None, "⚠️ Não foi possível autenticar o cliente."
 
     try:
-        cliente = gspread.authorize(creds)
-        # Usa o ID recebido por argumento
-        planilha = cliente.open_by_key(spreadsheet_id) 
+        # Abre a planilha pelo ID lido dos segredos
+        planilha = cliente.open_by_key(spreadsheet_id)
         aba = planilha.worksheet(NOME_ABA)
         dados = aba.get(INTERVALO)
     except Exception as e:
@@ -130,8 +137,12 @@ def montar_mensagem(df):
 
     return "\n".join(mensagens)
 
-# Adaptado para receber a webhook_url como argumento
+# --- MODIFICADO ---
 def enviar_webhook(mensagem, webhook_url):
+    # A URL é recebida como parâmetro
+    if not webhook_url:
+        print("❌ Erro: WEBHOOK_URL não fornecida.")
+        return
     try:
         payload = {
             "tag": "text",
@@ -140,50 +151,55 @@ def enviar_webhook(mensagem, webhook_url):
                 "content": mensagem
             }
         }
-        # Usa a URL recebida por argumento
-        response = requests.post(webhook_url, json=payload) 
+        response = requests.post(webhook_url, json=payload)
         response.raise_for_status()
         print("✅ Mensagem enviada com sucesso.")
     except Exception as e:
         print(f"❌ Erro ao enviar mensagem: {e}")
 
-# Adaptado para receber e repassar a webhook_url
+# --- MODIFICADO ---
 def enviar_em_blocos(mensagem, webhook_url, limite=3000):
+    # Repassa a webhook_url
     linhas = mensagem.split('\n')
     bloco = []
     for linha in linhas:
         bloco.append(linha)
         if len("\n".join(bloco)) > limite:
             bloco.pop()
-            # Repassa a URL para a função enviar_webhook
-            enviar_webhook("```\n" + "\n".join(bloco) + "\n```", webhook_url) 
+            enviar_webhook("```\n" + "\n".join(bloco) + "\n```", webhook_url) # Passa a URL
             time.sleep(1)
             bloco = [linha]
     if bloco:
-        # Repassa a URL para a função enviar_webhook
-        enviar_webhook("```\n" + "\n".join(bloco) + "\n```", webhook_url) 
+        enviar_webhook("```\n" + "\n".join(bloco) + "\n```", webhook_url) # Passa a URL
 
+# --- MODIFICADO ---
 def main():
     # Carrega as variáveis de ambiente fornecidas pelo GitHub Actions
     webhook_url = os.environ.get('SEATALK_WEBHOOK_URL')
     spreadsheet_id = os.environ.get('SPREADSHEET_ID')
-
+    
     # Validação para garantir que os segredos foram carregados
     if not webhook_url or not spreadsheet_id:
         print("❌ Erro: Variáveis de ambiente SEATALK_WEBHOOK_URL e/ou SPREADSHEET_ID não definidas.")
         print("Verifique os 'Secrets' do repositório no GitHub.")
         return
 
-    # Passa o spreadsheet_id como argumento
-    df, erro = obter_dados_expedicao(spreadsheet_id) 
+    # Autentica primeiro para obter o cliente
+    cliente = autenticar_google()
+    if not cliente:
+        print("❌ Falha na autenticação. Encerrando.")
+        return
+
+    # Passa o cliente e o ID da planilha
+    df, erro = obter_dados_expedicao(cliente, spreadsheet_id)
     if erro:
         print(erro)
         return
     
     mensagem = montar_mensagem(df)
     
-    # Passa a webhook_url como argumento
-    enviar_em_blocos(mensagem, webhook_url) 
+    # Passa a webhook_url para o envio
+    enviar_em_blocos(mensagem, webhook_url)
 
 if __name__ == "__main__":
     main()
