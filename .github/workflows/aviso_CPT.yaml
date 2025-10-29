@@ -1,32 +1,30 @@
-name: Robô Expedição
+name: Fiscal CPT Iminente
 
 on:
-  workflow_dispatch: {}
   schedule:
-    - cron: '0 * * * *'
+    - cron: '*/5 * * * *'   # A cada 5 minutos (mais preciso para pegar 30/20/10)
+  workflow_dispatch: {}
 
 jobs:
-  run-expedicao-script:
+  run-fiscal-script:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: 1. Checkout do Repositório
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 2. Configurar Python 3.10
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: 3. Instalar Dependências
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 4. Rodar o Script Python
-        run: python main.py 
+      - name: Run Fiscal Script
+        run: python fiscal_cpt.py
         env:
-          # ✅ Nome correto — indica que é JSON, não base64
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          SEATALK_WEBHOOK_URL: ${{ secrets.SEATALK_WEBHOOK_URL }} 
+          SEATALK_WEBHOOK_URL: ${{ secrets.SEATALK_WEBHOOK_URL }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
