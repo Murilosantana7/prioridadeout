@@ -26,11 +26,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # --- ETAPA DE DEBUG ---
+      # --- ETAPA DE DEBUG (Versão Corrigida) ---
       # Esta etapa vai nos mostrar o que está salvo no segredo
-      # --- CORREÇÃO: Adicionadas aspas simples em volta do comando ---
       - name: 4a. DEBUG - Mostra o início do segredo
-        run: 'echo "O segredo começa com: ${{ secrets.GOOGLE_CREDENTIALS | slice: 0, 20 }}..."'
+        run: |
+          echo "Debug: Verificando o início do segredo..."
+          SECRET_PREVIEW=$(echo "${{ secrets.GOOGLE_CREDENTIALS }}" | cut -c1-20)
+          echo "O segredo começa com: $SECRET_PREVIEW..."
 
       - name: 4b. Criar arquivo de credenciais do Google
         # Pega a string Base64, decodifica, e salva o JSON original
