@@ -1,0 +1,45 @@
+name: Robô Expedição
+
+on:
+  # Permite rodar manualmente pelo GitHub
+  workflow_dispatch: {}
+  
+  # Define um agendamento (ex: a cada hora, no minuto 0)
+  schedule:
+    - cron: '0 * * * *' # ┌───────────── minuto (0 - 59)
+                         # │ ┌───────────── hora (0 - 23)
+                         # │ │ ┌───────────── dia do mês (1 - 31)
+                         # │ │ │ ┌───────────── mês (1 - 12)
+                         # │ │ │ │ ┌───────────── dia da semana (0 - 6)
+
+jobs:
+  run-expedicao-script:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 1. Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 3. Instalar Dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 4. Criar arquivo de credenciais do Google
+        # Esta é a etapa "mágica":
+        # Ela pega o segredo GOOGLE_CREDENTIALS e o salva em um 
+        # arquivo temporário chamado credentials.json no runner
+        run: echo "${{ secrets.GOOGLE_CREDENTIALS }}" > credentials.json
+
+      - name: 5. Rodar o Script Python
+        # O script agora usará o credentials.json local
+        # e as variáveis de ambiente para os outros segredos
+        run: python seu_script.py # <-- Troque "seu_script.py" pelo nome do seu arquivo .py
+        env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          SEATALK_WEBHOOK_URL: ${{ secrets.SEATALK_WEBHOOK_URL }}
