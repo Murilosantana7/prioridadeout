@@ -1,16 +1,13 @@
 name: Robô Expedição
 
 on:
-  # Permite rodar manualmente pelo GitHub
+  # Permite rodar manually pelo GitHub
   workflow_dispatch: {}
   
-  # Define um agendamento (ex: a cada hora, no minuto 0)
+  # Define um agendamento (a cada hora, no minuto 0)
+  # Isto já está correto para rodar "de 1 em 1 hora"
   schedule:
-    - cron: '0 * * * *' # ┌───────────── minuto (0 - 59)
-                         # │ ┌───────────── hora (0 - 23)
-                         # │ │ ┌───────────── dia do mês (1 - 31)
-                         # │ │ │ ┌───────────── mês (1 - 12)
-                         # │ │ │ │ ┌───────────── dia da semana (0 - 6)
+    - cron: '0 * * * *' 
 
 jobs:
   run-expedicao-script:
@@ -39,7 +36,11 @@ jobs:
       - name: 5. Rodar o Script Python
         # O script agora usará o credentials.json local
         # e as variáveis de ambiente para os outros segredos
-        run: python seu_script.py # <-- Troque "seu_script.py" pelo nome do seu arquivo .py
+        
+        # !!!! CORREÇÃO NECESSÁRIA AQUI !!!!
+        # !!!! TROQUE 'NOME_DO_SEU_SCRIPT.py' PELO NOME DO SEU ARQUIVO !!!!
+        run: python main.py 
+        
         env:
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           SEATALK_WEBHOOK_URL: ${{ secrets.SEATALK_WEBHOOK_URL }}
