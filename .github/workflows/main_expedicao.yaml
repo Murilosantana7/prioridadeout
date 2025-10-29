@@ -29,7 +29,8 @@ jobs:
       - name: 4. Criar arquivo de credenciais do Google
         # --- ESTA É A CORREÇÃO DEFINITIVA ---
         # Pega a string Base64, decodifica, e salva o JSON original
-        run: echo "${{ secrets.GOOGLE_CREDENTIALS }}" | base64 --decode > credentials.json
+        # Trocado 'echo' por 'printf' para evitar quebra de linha extra
+        run: printf '%s' "${{ secrets.GOOGLE_CREDENTIALS }}" | base64 --decode > credentials.json
 
       - name: 5. Rodar o Script Python
         # O script agora usará o credentials.json local
