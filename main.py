@@ -4,44 +4,41 @@ import requests
 import time
 from datetime import datetime, timedelta
 from pytz import timezone
-import os      # Importado para ler os segredos
-import json    # Importado para ler o segredo JSON
-import base64  # <-- IMPORTADO PARA DECODIFICAR O SEGREDO
+import os
+import json  # Para carregar o JSON das credenciais diretamente
 
 # --- CONSTANTES GLOBAIS ---
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 NOME_ABA = 'Base Pending Tratado'
 INTERVALO = 'A:F'
 
-# --- AUTENTICAÇÃO FINAL (LENDO BASE64) ---
+# --- AUTENTICAÇÃO CORRIGIDA (SEM BASE64!) ---
 def autenticar_google():
-    """Autentica usando o Secret Base64 do GitHub."""
-    
-    # 1. Lê a string Base64 do segredo
-    creds_base64_str = os.environ.get('GCP_SA_KEY_BASE64')
-    if not creds_base64_str:
-        print("❌ Erro: Variável de ambiente 'GCP_SA_KEY_BASE64' não definida.")
+    """Autentica usando o Secret JSON do GitHub (NÃO é base64!)."""
+
+    # 1. Lê o JSON puro do segredo
+    creds_json_str = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+    if not creds_json_str:
+        print("❌ Erro: Variável de ambiente 'GOOGLE_SERVICE_ACCOUNT_JSON' não definida.")
         return None
-        
+
     try:
-        # 2. Decodifica o Base64 para obter a string JSON
-        creds_json_str = base64.b64decode(creds_base64_str).decode('utf-8')
-        
-        # 3. Carrega a string JSON em um dicionário
+        # 2. Carrega a string JSON diretamente em um dicionário — SEM base64!
         creds_dict = json.loads(creds_json_str)
-        
-        # 4. Autentica com o dicionário
+
+        # 3. Autentica com o dicionário
         cliente = gspread.service_account_from_dict(creds_dict, scopes=SCOPES)
-        print("✅ Cliente gspread autenticado com Service Account (via Base64).")
+        print("✅ Cliente gspread autenticado com Service Account (via JSON direto).")
         return cliente
-        
+
     except json.JSONDecodeError as e:
         print(f"❌ Erro ao decodificar o JSON das credenciais: {e}")
-        print("   Isso geralmente significa que o segredo Base64 está corrompido ou é o JSON puro.")
+        print("   Isso geralmente significa que o segredo está corrompido ou foi salvo incorretamente.")
         return None
     except Exception as e:
         print(f"❌ Erro ao autenticar com Service Account: {e}")
         return None
+
 
 def identificar_turno(hora):
     if 6 <= hora < 14:
@@ -50,6 +47,7 @@ def identificar_turno(hora):
         return "Turno 2"
     else:
         return "Turno 3"
+
 
 def obter_dados_expedicao(cliente, spreadsheet_id):
     if not cliente:
@@ -79,6 +77,7 @@ def obter_dados_expedicao(cliente, spreadsheet_id):
 
     return df, None
 
+
 def formatar_doca(doca):
     doca = doca.strip()
     if not doca or doca == '-':
@@ -90,6 +89,7 @@ def formatar_doca(doca):
         return f"Doca {doca}"
     else:
         return doca
+
 
 def montar_mensagem(df):
     agora = datetime.now(timezone('America/Sao_Paulo')).replace(tzinfo=None)
@@ -145,6 +145,7 @@ def montar_mensagem(df):
 
     return "\n".join(mensagens)
 
+
 def enviar_webhook(mensagem, webhook_url):
     if not webhook_url:
         print("❌ Erro: WEBHOOK_URL não fornecida.")
@@ -163,6 +164,7 @@ def enviar_webhook(mensagem, webhook_url):
     except Exception as e:
         print(f"❌ Erro ao enviar mensagem: {e}")
 
+
 def enviar_em_blocos(mensagem, webhook_url, limite=3000):
     linhas = mensagem.split('\n')
     bloco = []
@@ -176,15 +178,16 @@ def enviar_em_blocos(mensagem, webhook_url, limite=3000):
     if bloco:
         enviar_webhook("```\n" + "\n".join(bloco) + "\n```", webhook_url)
 
+
 def main():
     webhook_url = os.environ.get('SEATALK_WEBHOOK_URL')
     spreadsheet_id = os.environ.get('SPREADSHEET_ID')
-    
+
     if not webhook_url or not spreadsheet_id:
         print("❌ Erro: Variáveis de ambiente SEATALK_WEBHOOK_URL e/ou SPREADSHEET_ID não definidas.")
         return
 
-    cliente = autenticar_google()
+    cliente = autenticar_google()  # Agora lê GOOGLE_SERVICE_ACCOUNT_JSON
     if not cliente:
         print("❌ Falha na autenticação. Encerrando.")
         return
@@ -193,10 +196,10 @@ def main():
     if erro:
         print(erro)
         return
-    
+
     mensagem = montar_mensagem(df)
-    
     enviar_em_blocos(mensagem, webhook_url)
+
 
 if __name__ == "__main__":
     main()
