@@ -1,13 +1,11 @@
 import pandas as pd
 import gspread
-import httpx
-import base64
+import requests  # ← Voltamos ao requests (já instalado!)
 import time
 from datetime import datetime, timedelta
 from pytz import timezone
 import os
 import json
-from typing import Text
 
 # --- CONSTANTES ---
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
@@ -104,47 +102,27 @@ def montar_mensagem_alerta(df):
     return "\n".join(mensagens)
 
 
-def enviar_alerta_com_imagem(mensagem_texto: str, webhook_url: str, caminho_imagem: str = "alerta.gif"):
+def enviar_webhook_com_mencao(mensagem_texto: str, webhook_url: str, user_id: str = "1508081817"):
     """
-    Envia imagem + mensagem com menção REAL pelo ID do usuário no SeaTalk.
+    Envia mensagem com menção REAL pelo ID, usando requests (SEM httpx).
     """
     if not webhook_url:
         print("❌ WEBHOOK_URL não definida.")
         return
 
-    # Tenta enviar imagem primeiro (opcional)
-    try:
-        with open(caminho_imagem, "rb") as f:
-            raw_image_content = f.read()
-            base64_encoded_image = base64.b64encode(raw_image_content).decode("utf-8")
-
-        payload_imagem = {
-            "tag": "image",
-            "image_base64": {"content": base64_encoded_image}
-        }
-
-        response = httpx.post(webhook_url, json=payload_imagem)
-        response.raise_for_status()
-        print("✅ Imagem enviada com sucesso.")
-
-    except FileNotFoundError:
-        print(f"❌ Arquivo '{caminho_imagem}' não encontrado. Enviando só texto...")
-    except Exception as e:
-        print(f"❌ Erro ao enviar imagem: {e}")
-
-    # Sempre envia a mensagem com marcação real
+    # Texto base com tag <at>
     texto_base = "🚨 ALERTA DE CPT IMINENTE<at id=\"{user_id}\"></at>"
     mensagem_completa = f"{texto_base}\n\n{mensagem_texto}"
-    offset = len("🚨 ALERTA DE CPT IMINENTE")  # ← Calcula automaticamente!
+    offset = len("🚨 ALERTA DE CPT IMINENTE")  # Calcula posição da tag
 
-    payload_texto = {
+    payload = {
         "tag": "text",
         "text": {
-            "format": 2,
-            "content": mensagem_completa.format(user_id=USER_ID_LUIS),
+            "format": 2,  # ← OBRIGATÓRIO para marcações
+            "content": mensagem_completa.format(user_id=user_id),
             "at_list": [
                 {
-                    "id": USER_ID_LUIS,
+                    "id": user_id,
                     "len": 0,
                     "offset": offset
                 }
@@ -153,11 +131,11 @@ def enviar_alerta_com_imagem(mensagem_texto: str, webhook_url: str, caminho_imag
     }
 
     try:
-        response = httpx.post(webhook_url, json=payload_texto)
+        response = requests.post(webhook_url, json=payload)
         response.raise_for_status()
         print("✅ Mensagem com menção REAL enviada com sucesso.")
     except Exception as e:
-        print(f"❌ Falha ao enviar mensagem com menção: {e}")
+        print(f"❌ Falha ao enviar mensagem: {e}")
 
 
 def main():
@@ -180,7 +158,7 @@ def main():
     mensagem = montar_mensagem_alerta(df)
 
     if mensagem:
-        enviar_alerta_com_imagem(mensagem, webhook_url)
+        enviar_webhook_com_mencao(mensagem, webhook_url, USER_ID_LUIS)
     else:
         print("✅ Nenhuma LT nos critérios de alerta. Nada enviado.")
 
