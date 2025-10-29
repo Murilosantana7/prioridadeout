@@ -1,18 +1,20 @@
 import pandas as pd
 import gspread
-import requests
+import httpx
+import base64
 import time
 from datetime import datetime, timedelta
 from pytz import timezone
 import os
 import json
+from typing import Text
 
 # --- CONSTANTES ---
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 NOME_ABA = 'Base Pending Tratado'
 INTERVALO = 'A:F'
-
-MINUTOS_ALERTA = [30, 20, 10]  # Só dispara nesses intervalos
+MINUTOS_ALERTA = [30, 20, 10]
+USER_ID_LUIS = "1508081817"  # ← ID DO LUIS TIBÉRIO
 
 
 def autenticar_google():
@@ -75,18 +77,13 @@ def obter_dados_expedicao(cliente, spreadsheet_id):
 def montar_mensagem_alerta(df):
     agora = datetime.now(timezone('America/Sao_Paulo')).replace(tzinfo=None)
 
-    # Calcula minutos restantes
     df = df.copy()
     df['minutos_restantes'] = ((df['CPT'] - agora).dt.total_seconds() // 60).astype(int)
-
-    # Filtra apenas os minutos de alerta (30, 20, 10)
     df_filtrado = df[df['minutos_restantes'].isin(MINUTOS_ALERTA)]
 
-    # Se NENHUMA linha atende → retorna None (não envia nada!)
     if df_filtrado.empty:
         return None
 
-    # Agrupa por minuto restante (ordem decrescente: 30, 20, 10)
     mensagens = []
     for minuto in sorted(MINUTOS_ALERTA, reverse=True):
         grupo = df_filtrado[df_filtrado['minutos_restantes'] == minuto]
@@ -99,32 +96,68 @@ def montar_mensagem_alerta(df):
                 doca = formatar_doca(row['Doca'])
                 cpt_str = row['CPT'].strftime('%H:%M')
                 mensagens.append(f"🚛 {lt} | {doca} | Destino: {destino} | CPT: {cpt_str}")
-            mensagens.append("")  # Linha em branco entre grupos
+            mensagens.append("")
 
-    # Remove última linha em branco
     if mensagens and mensagens[-1] == "":
         mensagens.pop()
 
     return "\n".join(mensagens)
 
 
-def enviar_webhook(mensagem, webhook_url):
+def enviar_alerta_com_imagem(mensagem_texto: str, webhook_url: str, caminho_imagem: str = "alerta.gif"):
+    """
+    Envia imagem + mensagem com menção REAL pelo ID do usuário no SeaTalk.
+    """
     if not webhook_url:
         print("❌ WEBHOOK_URL não definida.")
         return
+
+    # Tenta enviar imagem primeiro (opcional)
     try:
-        payload = {
-            "tag": "text",
-            "text": {
-                "format": 1,
-                "content": mensagem
-            }
+        with open(caminho_imagem, "rb") as f:
+            raw_image_content = f.read()
+            base64_encoded_image = base64.b64encode(raw_image_content).decode("utf-8")
+
+        payload_imagem = {
+            "tag": "image",
+            "image_base64": {"content": base64_encoded_image}
         }
-        response = requests.post(webhook_url, json=payload)
+
+        response = httpx.post(webhook_url, json=payload_imagem)
         response.raise_for_status()
-        print("✅ Alerta enviado com sucesso.")
+        print("✅ Imagem enviada com sucesso.")
+
+    except FileNotFoundError:
+        print(f"❌ Arquivo '{caminho_imagem}' não encontrado. Enviando só texto...")
     except Exception as e:
-        print(f"❌ Erro ao enviar alerta: {e}")
+        print(f"❌ Erro ao enviar imagem: {e}")
+
+    # Sempre envia a mensagem com marcação real
+    texto_base = "🚨 ALERTA DE CPT IMINENTE<at id=\"{user_id}\"></at>"
+    mensagem_completa = f"{texto_base}\n\n{mensagem_texto}"
+    offset = len("🚨 ALERTA DE CPT IMINENTE")  # ← Calcula automaticamente!
+
+    payload_texto = {
+        "tag": "text",
+        "text": {
+            "format": 2,
+            "content": mensagem_completa.format(user_id=USER_ID_LUIS),
+            "at_list": [
+                {
+                    "id": USER_ID_LUIS,
+                    "len": 0,
+                    "offset": offset
+                }
+            ]
+        }
+    }
+
+    try:
+        response = httpx.post(webhook_url, json=payload_texto)
+        response.raise_for_status()
+        print("✅ Mensagem com menção REAL enviada com sucesso.")
+    except Exception as e:
+        print(f"❌ Falha ao enviar mensagem com menção: {e}")
 
 
 def main():
@@ -146,9 +179,8 @@ def main():
 
     mensagem = montar_mensagem_alerta(df)
 
-    # ⚠️ SÓ ENVIA SE HOUVER PELO MENOS UMA LT NOS CRITÉRIOS!
     if mensagem:
-        enviar_webhook("```\n" + mensagem + "\n```", webhook_url)
+        enviar_alerta_com_imagem(mensagem, webhook_url)
     else:
         print("✅ Nenhuma LT nos critérios de alerta. Nada enviado.")
 
