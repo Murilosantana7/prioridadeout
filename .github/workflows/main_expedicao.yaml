@@ -27,13 +27,9 @@ jobs:
           pip install -r requirements.txt
 
       - name: 4. Criar arquivo de credenciais do Google
-        # Esta é a etapa "mágica":
-        # Ela pega o segredo GOOGLE_CREDENTIALS e o salva em um 
-        # arquivo temporário chamado credentials.json no runner
-        
-        # --- CORREÇÃO AQUI ---
-        # Trocado '%s' por '%b' para interpretar quebras de linha (ex: \n)
-        run: printf "%b" "${{ secrets.GOOGLE_CREDENTIALS }}" > credentials.json
+        # --- ESTA É A CORREÇÃO DEFINITIVA ---
+        # Pega a string Base64, decodifica, e salva o JSON original
+        run: echo "${{ secrets.GOOGLE_CREDENTIALS }}" | base64 --decode > credentials.json
 
       - name: 5. Rodar o Script Python
         # O script agora usará o credentials.json local
