@@ -11,6 +11,7 @@ import json
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 NOME_ABA = 'Base Pending Tratado'
 INTERVALO = 'A:F'
+USER_ID_LUIS = "1508081817"  # ← ID DO LUIS TIBÉRIO (CONFIRMADO!)
 
 
 def autenticar_google():
@@ -83,10 +84,6 @@ def montar_mensagem_alerta(df):
         return None
 
     mensagens = []
-
-    # 👇👇👇 INCLUI A MENÇÃO VISUAL NO TOPO 👇👇👇
-    mensagens.append("@Luis Tiberio | COP | SOC SP5")
-    mensagens.append("")
     mensagens.append("🚨 ALERTA DE CPT IMINENTE")
     mensagens.append("📋 LISTA DE LTs NAS PRÓXIMAS 4H\n")
 
@@ -112,9 +109,9 @@ def montar_mensagem_alerta(df):
     return "\n".join(mensagens)
 
 
-def enviar_webhook(mensagem_texto: str, webhook_url: str):
+def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, user_ids: list = None):
     """
-    Envia mensagem simples de texto (formato 1) — mais compatível.
+    Envia mensagem com menção OFICIAL via mentioned_list (formato moderno do SeaTalk).
     """
     if not webhook_url:
         print("❌ WEBHOOK_URL não definida.")
@@ -123,17 +120,22 @@ def enviar_webhook(mensagem_texto: str, webhook_url: str):
     payload = {
         "tag": "text",
         "text": {
-            "format": 1,  # ← Simples e confiável
+            "format": 1,
             "content": mensagem_texto
         }
     }
 
+    # 👇👇👇 ADICIONA A LISTA DE USUÁRIOS A SEREM MARCADOS 👇👇👇
+    if user_ids:
+        payload["text"]["mentioned_list"] = user_ids
+
     try:
         response = requests.post(webhook_url, json=payload)
         response.raise_for_status()
-        print("✅ Mensagem enviada com sucesso.")
+        print("✅ Mensagem com menção OFICIAL enviada com sucesso.")
     except Exception as e:
         print(f"❌ Falha ao enviar mensagem: {e}")
+        print(f"   Payload enviado: {payload}")  # Para debug
 
 
 def main():
@@ -156,7 +158,8 @@ def main():
     mensagem = montar_mensagem_alerta(df)
 
     if mensagem:
-        enviar_webhook(mensagem, webhook_url)
+        # 👇👇👇 ENVIA COM MENÇÃO OFICIAL AO LUIS TIBÉRIO 👇👇👇
+        enviar_webhook_com_mencao_oficial(mensagem, webhook_url, user_ids=[USER_ID_LUIS])
     else:
         print("✅ Nenhuma LT nas próximas 4h. Nada enviado.")
 
