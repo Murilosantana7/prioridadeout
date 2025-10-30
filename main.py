@@ -10,24 +10,24 @@ import json
 
 # --- CONSTANTES ---
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-NOME_ABA = 'Base Pending Tratado'
-INTERVALO = 'A:F'
+NOME_ABA = 'Reporte prioridade'
+INTERVALO = 'A:E'
 CAMINHO_IMAGEM = "alerta.gif"
 
 # 👥 DICIONÁRIO DE PESSOAS POR TURNO (COM IDS REAIS!)
 TURNO_PARA_IDS = {
     "Turno 1": [
-        "1461929762",  # Iromar Souza
+        "1285879030",  # Priscila Cristofaro
         "9465967606",  # Fidel Lúcio
         "1268695707"   # Claudio Olivatto
     ],
     "Turno 2": [
-        "9356934188",  # Fabrício Damasceno
+        "9260655622",  # Mariane Marquezini
         "1386559133",  # Murilo Santana
         "1298055860"   # Matheus Damas
     ],
     "Turno 3": [
-        "9289770437",  # Fernando Aparecido da Costa
+        "1210347148",  # Danilo Pereira
         "9474534910",  # Kaio Baldo
         "1499919880"   # Sandor Nemes
     ]
@@ -48,6 +48,7 @@ def identificar_turno_atual():
 
 
 def autenticar_google():
+    """Autentica com a API do Google."""
     creds_json_str = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
     if not creds_json_str:
         print("❌ Erro: Variável de ambiente 'GOOGLE_SERVICE_ACCOUNT_JSON' não definida.")
@@ -64,6 +65,7 @@ def autenticar_google():
 
 
 def formatar_doca(doca):
+    """Formata o texto da doca (função original)."""
     doca = doca.strip()
     if not doca or doca == '-':
         return "Doca --"
@@ -77,13 +79,14 @@ def formatar_doca(doca):
 
 
 def obter_dados_expedicao(cliente, spreadsheet_id):
+    """Busca dados da planilha e trata as colunas da aba 'Reporte prioridade'."""
     if not cliente:
         return None, "⚠️ Cliente não autenticado."
 
     try:
         planilha = cliente.open_by_key(spreadsheet_id)
-        aba = planilha.worksheet(NOME_ABA)
-        dados = aba.get(INTERVALO)
+        aba = planilha.worksheet(NOME_ABA) # Vai usar 'Reporte prioridade'
+        dados = aba.get(INTERVALO) # Vai usar 'A:E'
     except Exception as e:
         return None, f"⚠️ Erro ao acessar planilha: {e}"
 
@@ -93,75 +96,62 @@ def obter_dados_expedicao(cliente, spreadsheet_id):
     df = pd.DataFrame(dados[1:], columns=dados[0])
     df.columns = df.columns.str.strip()
 
-    for col in ['Doca', 'LH Trip Number', 'Station Name', 'CPT']:
+    # ✨ ALTERADO: Verificando as colunas do seu screenshot
+    colunas_necessarias = ['LT', 'Nome do Motorista', 'DOCA', "TO's"]
+    for col in colunas_necessarias:
         if col not in df.columns:
-            return None, f"⚠️ Coluna '{col}' não encontrada."
+            return None, f"⚠️ Coluna '{col}' não encontrada na aba '{NOME_ABA}'."
 
-    df = df[df['LH Trip Number'].str.strip() != '']
-    df['CPT'] = pd.to_datetime(df['CPT'], dayfirst=True, errors='coerce')
-    df = df.dropna(subset=['CPT'])
+    # ✨ ALTERADO: Lendo 'LT'
+    df = df[df['LT'].str.strip() != '']
+    
+    # ✨ REMOVIDO: Não precisamos mais converter 'CPT' ou 'Próximo ETA'
+    # A lógica de tempo foi removida.
 
     return df, None
 
 
 def montar_mensagem_alerta(df):
-    tz = timezone('America/Sao_Paulo')
-    agora = datetime.now(tz)
-
-    df = df.copy()
-    df['CPT'] = pd.to_datetime(df['CPT'], dayfirst=True, errors='coerce')
-    df = df.dropna(subset=['CPT'])
-    df['CPT'] = df['CPT'].dt.tz_localize(tz, ambiguous='NaT', nonexistent='NaT')
-    df = df.dropna(subset=['CPT'])
-    df['minutos_restantes'] = ((df['CPT'] - agora).dt.total_seconds() // 60).astype(int)
-    df = df[df['minutos_restantes'] >= 0]
-
-    def agrupar_minutos(minutos):
-        if 21 <= minutos <= 30: return 30
-        elif 11 <= minutos <= 20: return 20
-        elif 1 <= minutos <= 10: return 10
-        else: return None
-
-    df['grupo_alerta'] = df['minutos_restantes'].apply(agrupar_minutos)
-    df_filtrado = df.dropna(subset=['grupo_alerta'])
-
-    if df_filtrado.empty:
-        return None
+    """Monta a mensagem de alerta para TODAS as LTs na aba 'Reporte prioridade'."""
+    
+    # ✨ REMOVIDO: Toda a lógica de tempo (10 horas, CPT, ETA) foi removida.
+    # Esta função agora formata TUDO o que está no DataFrame.
+    
+    if df.empty:
+        return None # Nada para alertar
 
     mensagens = []
-    for minuto in [30, 20, 10]:
-        grupo = df_filtrado[df_filtrado['grupo_alerta'] == minuto]
-        if not grupo.empty:
-            
-            mensagens.append(f"⚠️ Atenção!!!")
-            
-            # ✨ ALTERAÇÃO: Adicionando DUAS linhas em branco para o espaço
-            mensagens.append("") 
-            mensagens.append("") 
-            
-            for _, row in grupo.iterrows():
-                lt = row['LH Trip Number'].strip()
-                destino = row['Station Name'].strip()
-                doca = formatar_doca(row['Doca'])
-                cpt_str = row['CPT'].strftime('%H:%M') 
-                minutos_reais = int(row['minutos_restantes'])
-                
-                # ✨ ALTERAÇÃO: Formato em 4 linhas
-                mensagens.append(f"🚛 {lt}")
-                mensagens.append(f"{doca}")
-                mensagens.append(f"Destino: {destino}")
-                mensagens.append(f"CPT: {cpt_str} (faltam {minutos_reais} min)")
-                
-                # Linha em branco antes da próxima LT
-                mensagens.append("") 
+    
+    # ✨ ALTERADO: Título da mensagem conforme seu exemplo
+    mensagens.append(f"⚠️ Atenção Prioridade de descarga!")
+    mensagens.append("") # Linha em branco
+    mensagens.append("") # Linha em branco
+
+    # Loop por todas as linhas do DataFrame
+    for _, row in df.iterrows():
+        # ✨ ALTERADO: Buscando os novos dados da planilha
+        lt = row['LT'].strip()
+        motorista = row['Nome do Motorista'].strip()
+        doca = formatar_doca(row['DOCA']) # Reutilizando a função que você já tinha
+        tos = row["TO's"].strip()
+        
+        # ✨ ALTERADO: Novo formato da mensagem (4 linhas)
+        mensagens.append(f"🚛 {lt}")
+        mensagens.append(f"{doca}")
+        mensagens.append(f"Motorista: {motorista}")
+        mensagens.append(f"Qntd de TO´s: {tos}")
+        
+        # Linha em branco antes da próxima LT
+        mensagens.append("") 
 
     if mensagens and mensagens[-1] == "":
-        mensagens.pop()
+        mensagens.pop() # Remove o último espaço em branco
 
     return "\n".join(mensagens)
 
 
 def enviar_imagem(webhook_url: str, caminho_imagem: str = CAMINHO_IMAGEM):
+    """Envia a imagem de alerta (função original)."""
     if not webhook_url:
         print("❌ WEBHOOK_URL não definida.")
         return False
@@ -183,6 +173,7 @@ def enviar_imagem(webhook_url: str, caminho_imagem: str = CAMINHO_IMAGEM):
 
 
 def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, user_ids: list = None):
+    """Envia a mensagem de texto e marca os usuários (função original)."""
     if not webhook_url:
         print("❌ WEBHOOK_URL não definida.")
         return
@@ -198,13 +189,12 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         }
     }
 
-    # ✨ ALTERAÇÃO: O bloco 'mentioned_list' foi REATIVADO.
-    # Isso GARANTE o "ping", e fará o Seatalk adicionar os nomes no topo.
+    # Bloco 'mentioned_list' está ATIVADO no seu script original
     if user_ids:
         user_ids_validos = [uid for uid in user_ids if uid and uid.strip()]
         if user_ids_validos:
             
-            # Linha REATIVADA:
+            # Linha REATIVADA (como no seu original):
             payload["text"]["mentioned_list"] = user_ids_validos
             
             print(f"✅ Enviando menção para: {user_ids_validos}")
@@ -220,6 +210,7 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
 
 
 def main():
+    """Função principal para rodar o bot."""
     webhook_url = os.environ.get('SEATALK_WEBHOOK_URL')
     spreadsheet_id = os.environ.get('SPREADSHEET_ID')
 
@@ -231,11 +222,13 @@ def main():
     if not cliente:
         return
 
+    # ✨ ALTERADO: Vai usar a nova lógica de obtenção de dados
     df, erro = obter_dados_expedicao(cliente, spreadsheet_id)
     if erro:
         print(erro)
         return
 
+    # ✨ ALTERADO: Vai usar a nova lógica de formatação de mensagem
     mensagem = montar_mensagem_alerta(df)
 
     if mensagem:
@@ -249,7 +242,7 @@ def main():
         # A função agora está configurada para MARCAR e formatar o corpo
         enviar_webhook_com_mencao_oficial(mensagem, webhook_url, user_ids=ids_para_marcar)
     else:
-        print("✅ Nenhuma LT nos critérios de alerta. Nada enviado.")
+        print("✅ Nenhuma LT na aba 'Reporte prioridade'. Nada enviado.")
 
 
 if __name__ == "__main__":
