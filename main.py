@@ -12,7 +12,6 @@ import json
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 NOME_ABA = 'Base Pending Tratado'
 INTERVALO = 'A:F'
-MINUTOS_ALERTA = [30, 20, 10]
 CAMINHO_IMAGEM = "alerta.gif"
 
 # 👥 DICIONÁRIO DE PESSOAS POR TURNO (COM IDS REAIS!)
@@ -111,38 +110,50 @@ def montar_mensagem_alerta(df):
 
     df = df.copy()
 
-    # Converte CPT para datetime, assumindo formato brasileiro
+    # Converte CPT para datetime
     df['CPT'] = pd.to_datetime(df['CPT'], dayfirst=True, errors='coerce')
     df = df.dropna(subset=['CPT'])
 
-    # Força fuso horário em CPT
+    # Força fuso horário
     df['CPT'] = df['CPT'].dt.tz_localize(tz, ambiguous='NaT', nonexistent='NaT')
     df = df.dropna(subset=['CPT'])
 
     # Calcula minutos restantes
     df['minutos_restantes'] = ((df['CPT'] - agora).dt.total_seconds() // 60).astype(int)
 
-    # Filtra: exatamente 30/20/10min e no futuro
-    df_filtrado = df[
-        (df['minutos_restantes'].isin(MINUTOS_ALERTA)) &
-        (df['minutos_restantes'] >= 0)
-    ]
+    # Filtra apenas futuros
+    df = df[df['minutos_restantes'] >= 0]
+
+    # Agrupa por faixas
+    def agrupar_minutos(minutos):
+        if 21 <= minutos <= 30:
+            return 30
+        elif 11 <= minutos <= 20:
+            return 20
+        elif 1 <= minutos <= 10:
+            return 10
+        else:
+            return None
+
+    df['grupo_alerta'] = df['minutos_restantes'].apply(agrupar_minutos)
+    df_filtrado = df.dropna(subset=['grupo_alerta'])
 
     if df_filtrado.empty:
         return None
 
     mensagens = []
-    for minuto in sorted(MINUTOS_ALERTA, reverse=True):
-        grupo = df_filtrado[df_filtrado['minutos_restantes'] == minuto]
+    for minuto in [30, 20, 10]:  # Ordem decrescente
+        grupo = df_filtrado[df_filtrado['grupo_alerta'] == minuto]
         if not grupo.empty:
             mensagens.append(f"⚠️ Atenção!!!")
-            mensagens.append(f"{minuto}min para o CPT.\n")
+            mensagens.append(f"{int(minuto)}min para o CPT.\n")
             for _, row in grupo.iterrows():
                 lt = row['LH Trip Number'].strip()
                 destino = row['Station Name'].strip()
                 doca = formatar_doca(row['Doca'])
-                cpt_str = row['CPT'].strftime('%d/%m %H:%M')  # Mostra data + hora
-                mensagens.append(f"🚛 {lt} | {doca} | Destino: {destino} | CPT: {cpt_str}")
+                cpt_str = row['CPT'].strftime('%d/%m %H:%M')
+                minutos_reais = int(row['minutos_restantes'])
+                mensagens.append(f"🚛 {lt} | {doca} | Destino: {destino} | CPT: {cpt_str} (faltam {minutos_reais} min)")
             mensagens.append("")
 
     if mensagens and mensagens[-1] == "":
