@@ -109,31 +109,18 @@ def montar_mensagem_alerta(df):
     agora = datetime.now(tz)
 
     df = df.copy()
-
-    # Converte CPT para datetime
     df['CPT'] = pd.to_datetime(df['CPT'], dayfirst=True, errors='coerce')
     df = df.dropna(subset=['CPT'])
-
-    # Força fuso horário
     df['CPT'] = df['CPT'].dt.tz_localize(tz, ambiguous='NaT', nonexistent='NaT')
     df = df.dropna(subset=['CPT'])
-
-    # Calcula minutos restantes
     df['minutos_restantes'] = ((df['CPT'] - agora).dt.total_seconds() // 60).astype(int)
-
-    # Filtra apenas futuros
     df = df[df['minutos_restantes'] >= 0]
 
-    # Agrupa por faixas
     def agrupar_minutos(minutos):
-        if 21 <= minutos <= 30:
-            return 30
-        elif 11 <= minutos <= 20:
-            return 20
-        elif 1 <= minutos <= 10:
-            return 10
-        else:
-            return None
+        if 21 <= minutos <= 30: return 30
+        elif 11 <= minutos <= 20: return 20
+        elif 1 <= minutos <= 10: return 10
+        else: return None
 
     df['grupo_alerta'] = df['minutos_restantes'].apply(agrupar_minutos)
     df_filtrado = df.dropna(subset=['grupo_alerta'])
@@ -142,25 +129,39 @@ def montar_mensagem_alerta(df):
         return None
 
     mensagens = []
-    for minuto in [30, 20, 10]:  # Ordem decrescente
+    for minuto in [30, 20, 10]:
         grupo = df_filtrado[df_filtrado['grupo_alerta'] == minuto]
         if not grupo.empty:
-            mensagens.append(f"⚠️ Atenção!!!")
             
-            # ✨ ALTERAÇÃO FEITA (1/2): Linha de resumo de tempo removida/comentada.
+            # ✨ ALTERAÇÃO (1/3): Adiciona "Atenção" e uma linha em branco
+            mensagens.append(f"⚠️ Atenção!!!")
+            mensagens.append("") # Linha em branco para separar do primeiro alerta
+
+            # (Linha de resumo de tempo continua comentada)
             # mensagens.append(f"{int(minuto)}min para o CPT.\n")
             
             for _, row in grupo.iterrows():
                 lt = row['LH Trip Number'].strip()
                 destino = row['Station Name'].strip()
                 doca = formatar_doca(row['Doca'])
-                cpt_str = row['CPT'].strftime('%d/%m %H:%M')
+                
+                # ✨ ALTERAÇÃO (2/3): Formato do CPT apenas para Hora:Minuto
+                # (Ex: 14:00 em vez de 30/10 14:00)
+                cpt_str = row['CPT'].strftime('%H:%M') 
+                
                 minutos_reais = int(row['minutos_restantes'])
-                mensagens.append(f"🚛 {lt} | {doca} | Destino: {destino} | CPT: {cpt_str} (faltam {minutos_reais} min)")
-            mensagens.append("")
+                
+                # ✨ ALTERAÇÃO (3/3): Mensagem formatada em 4 linhas
+                mensagens.append(f"🚛 {lt}")
+                mensagens.append(f"{doca}")
+                mensagens.append(f"Destino: {destino}")
+                mensagens.append(f"CPT: {cpt_str} (faltam {minutos_reais} min)")
+                
+                # Adiciona "2 espaços" (uma linha em branco) antes da próxima LT
+                mensagens.append("") 
 
     if mensagens and mensagens[-1] == "":
-        mensagens.pop()
+        mensagens.pop() # Remove o último espaço em branco
 
     return "\n".join(mensagens)
 
@@ -169,22 +170,15 @@ def enviar_imagem(webhook_url: str, caminho_imagem: str = CAMINHO_IMAGEM):
     if not webhook_url:
         print("❌ WEBHOOK_URL não definida.")
         return False
-
     try:
         with open(caminho_imagem, "rb") as f:
             raw_image_content = f.read()
             base64_encoded_image = base64.b64encode(raw_image_content).decode("utf-8")
-
-        payload = {
-            "tag": "image",
-            "image_base64": {"content": base64_encoded_image}
-        }
-
+        payload = {"tag": "image", "image_base64": {"content": base64_encoded_image}}
         response = requests.post(webhook_url, json=payload)
         response.raise_for_status()
         print("✅ Imagem enviada com sucesso.")
         return True
-
     except FileNotFoundError:
         print(f"❌ Arquivo '{caminho_imagem}' não encontrado. Pulando imagem...")
         return False
@@ -198,7 +192,8 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         print("❌ WEBHOOK_URL não definida.")
         return
 
-    # Mapa de IDs para nomes amigáveis (agora usado apenas para o 'mencoes_texto' se você reativar)
+    # Este dicionário não é mais usado para construir o texto, 
+    # mas o deixamos aqui para referência futura.
     mencoes_visuais = {
         "1461929762": "@Iromar Souza",
         "9465967606": "@Fidel Lúcio",
@@ -211,15 +206,8 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         "1499919880": "@Sandor Nemes"
     }
 
-    # Esta variável não é mais usada na mensagem_final, mas é deixada aqui
-    # caso você queira um log ou reativar no futuro.
-    mencoes_texto = ""
-    if user_ids:
-        nomes = [mencoes_visuais.get(uid, f"@ID{uid}") for uid in user_ids if uid.strip()]
-        mencoes_texto = " ".join(nomes) # Isso não será enviado, apenas 'mentioned_list'
-
-    # ✨ ALTERAÇÃO FEITA (2/2): 'mencoes_texto' removido da string final.
-    # A mensagem agora contém apenas o corpo do alerta.
+    # ✨ ALTERAÇÃO CORRIGIDA: 'mencoes_texto' não é mais usado aqui.
+    # A mensagem final é apenas o corpo do alerta (que já formatamos)
     mensagem_final = f"{mensagem_texto}"
 
     payload = {
@@ -230,7 +218,8 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         }
     }
 
-    # Esta é a parte que garante a NOTIFICAÇÃO (o PING)
+    # A 'mentioned_list' continua aqui para garantir o PING (notificação)
+    # É isso que faz o Seatalk adicionar os nomes no topo.
     if user_ids:
         user_ids_validos = [uid for uid in user_ids if uid and uid.strip()]
         if user_ids_validos:
