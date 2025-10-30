@@ -150,8 +150,9 @@ def montar_mensagem_alerta(df_filtrado, agora): # Recebe o DF já filtrado
         return None
 
     mensagens = []
-    
-    mensagens.append(f"⚠️ Atenção Prioridade de descarga!")
+
+    mensagens.append("")
+    mensagens.append(f"⚠️ Atenção, Prioridade de descarga!⚠️")
     mensagens.append("")
     mensagens.append("")
 
