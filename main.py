@@ -146,7 +146,10 @@ def montar_mensagem_alerta(df):
         grupo = df_filtrado[df_filtrado['grupo_alerta'] == minuto]
         if not grupo.empty:
             mensagens.append(f"⚠️ Atenção!!!")
-            mensagens.append(f"{int(minuto)}min para o CPT.\n")
+            
+            # ✨ ALTERAÇÃO FEITA (1/2): Linha de resumo de tempo removida/comentada.
+            # mensagens.append(f"{int(minuto)}min para o CPT.\n")
+            
             for _, row in grupo.iterrows():
                 lt = row['LH Trip Number'].strip()
                 destino = row['Station Name'].strip()
@@ -195,7 +198,7 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         print("❌ WEBHOOK_URL não definida.")
         return
 
-    # Mapa de IDs para nomes amigáveis
+    # Mapa de IDs para nomes amigáveis (agora usado apenas para o 'mencoes_texto' se você reativar)
     mencoes_visuais = {
         "1461929762": "@Iromar Souza",
         "9465967606": "@Fidel Lúcio",
@@ -208,13 +211,16 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         "1499919880": "@Sandor Nemes"
     }
 
+    # Esta variável não é mais usada na mensagem_final, mas é deixada aqui
+    # caso você queira um log ou reativar no futuro.
     mencoes_texto = ""
     if user_ids:
         nomes = [mencoes_visuais.get(uid, f"@ID{uid}") for uid in user_ids if uid.strip()]
-        mencoes_texto = " ".join(nomes)
+        mencoes_texto = " ".join(nomes) # Isso não será enviado, apenas 'mentioned_list'
 
-    # ✨ FORMATAÇÃO MELHORADA: espaços entre marcações e alerta
-    mensagem_final = f"{mencoes_texto}\n\n{mensagem_texto}"
+    # ✨ ALTERAÇÃO FEITA (2/2): 'mencoes_texto' removido da string final.
+    # A mensagem agora contém apenas o corpo do alerta.
+    mensagem_final = f"{mensagem_texto}"
 
     payload = {
         "tag": "text",
@@ -224,6 +230,7 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         }
     }
 
+    # Esta é a parte que garante a NOTIFICAÇÃO (o PING)
     if user_ids:
         user_ids_validos = [uid for uid in user_ids if uid and uid.strip()]
         if user_ids_validos:
