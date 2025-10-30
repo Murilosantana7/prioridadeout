@@ -133,35 +133,30 @@ def montar_mensagem_alerta(df):
         grupo = df_filtrado[df_filtrado['grupo_alerta'] == minuto]
         if not grupo.empty:
             
-            # ✨ ALTERAÇÃO (1/3): Adiciona "Atenção" e uma linha em branco
             mensagens.append(f"⚠️ Atenção!!!")
-            mensagens.append("") # Linha em branco para separar do primeiro alerta
-
-            # (Linha de resumo de tempo continua comentada)
-            # mensagens.append(f"{int(minuto)}min para o CPT.\n")
+            
+            # ✨ ALTERAÇÃO (1/2): Adicionando DUAS linhas em branco
+            mensagens.append("") 
+            mensagens.append("") 
             
             for _, row in grupo.iterrows():
                 lt = row['LH Trip Number'].strip()
                 destino = row['Station Name'].strip()
                 doca = formatar_doca(row['Doca'])
-                
-                # ✨ ALTERAÇÃO (2/3): Formato do CPT apenas para Hora:Minuto
-                # (Ex: 14:00 em vez de 30/10 14:00)
                 cpt_str = row['CPT'].strftime('%H:%M') 
-                
                 minutos_reais = int(row['minutos_restantes'])
                 
-                # ✨ ALTERAÇÃO (3/3): Mensagem formatada em 4 linhas
+                # Formato em 4 linhas
                 mensagens.append(f"🚛 {lt}")
                 mensagens.append(f"{doca}")
                 mensagens.append(f"Destino: {destino}")
                 mensagens.append(f"CPT: {cpt_str} (faltam {minutos_reais} min)")
                 
-                # Adiciona "2 espaços" (uma linha em branco) antes da próxima LT
+                # Linha em branco antes da próxima LT
                 mensagens.append("") 
 
     if mensagens and mensagens[-1] == "":
-        mensagens.pop() # Remove o último espaço em branco
+        mensagens.pop()
 
     return "\n".join(mensagens)
 
@@ -192,22 +187,7 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         print("❌ WEBHOOK_URL não definida.")
         return
 
-    # Este dicionário não é mais usado para construir o texto, 
-    # mas o deixamos aqui para referência futura.
-    mencoes_visuais = {
-        "1461929762": "@Iromar Souza",
-        "9465967606": "@Fidel Lúcio",
-        "1268695707": "@Claudio Olivatto",
-        "9356934188": "@Fabrício Damasceno | SOC SP05",
-        "1386559133": "@Murilo Santana",
-        "1298055860": "@Matheus Damas",
-        "9289770437": "@Fernando Aparecido da Costa",
-        "9474534910": "@Kaio Baldo",
-        "1499919880": "@Sandor Nemes"
-    }
-
-    # ✨ ALTERAÇÃO CORRIGIDA: 'mencoes_texto' não é mais usado aqui.
-    # A mensagem final é apenas o corpo do alerta (que já formatamos)
+    # A mensagem final é apenas o corpo do alerta
     mensagem_final = f"{mensagem_texto}"
 
     payload = {
@@ -218,20 +198,25 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         }
     }
 
-    # A 'mentioned_list' continua aqui para garantir o PING (notificação)
-    # É isso que faz o Seatalk adicionar os nomes no topo.
+    # ✨ ALTERAÇÃO (2/2): O bloco 'mentioned_list' foi DESATIVADO.
+    # Isso remove o PING e os nomes automáticos no topo,
+    # garantindo o formato limpo que você pediu.
     if user_ids:
         user_ids_validos = [uid for uid in user_ids if uid and uid.strip()]
         if user_ids_validos:
-            payload["text"]["mentioned_list"] = user_ids_validos
-            print(f"✅ Enviando menção para: {user_ids_validos}")
+            
+            # A linha abaixo foi COMENTADA para parar o ping:
+            # payload["text"]["mentioned_list"] = user_ids_validos
+            
+            print(f"✅ Mensagem será enviada SEM menção (silenciosa).")
+            print(f"   (IDs que seriam marcados: {user_ids_validos})")
         else:
             print("⚠️ Nenhum ID válido para marcar.")
 
     try:
         response = requests.post(webhook_url, json=payload)
         response.raise_for_status()
-        print("✅ Mensagem com menção OFICIAL enviada com sucesso.")
+        print("✅ Mensagem (silenciosa) enviada com sucesso.")
     except Exception as e:
         print(f"❌ Falha ao enviar mensagem: {e}")
 
@@ -263,6 +248,8 @@ def main():
         print(f"👥 IDs configurados para este turno: {ids_para_marcar}")
 
         enviar_imagem(webhook_url)
+        # Os IDs são passados para a função, mas ela agora está configurada
+        # para não usá-los para notificação (ping).
         enviar_webhook_com_mencao_oficial(mensagem, webhook_url, user_ids=ids_para_marcar)
     else:
         print("✅ Nenhuma LT nos critérios de alerta. Nada enviado.")
