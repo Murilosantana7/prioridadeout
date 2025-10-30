@@ -85,8 +85,8 @@ def obter_dados_expedicao(cliente, spreadsheet_id):
 
     try:
         planilha = cliente.open_by_key(spreadsheet_id)
-        aba = planilha.worksheet(NOME_ABA) # Continua 'Reporte prioridade'
-        dados = aba.get(INTERVALO) # Continua 'A:E'
+        aba = planilha.worksheet(NOME_ABA)
+        dados = aba.get(INTERVALO)
     except Exception as e:
         return None, f"⚠️ Erro ao acessar planilha: {e}"
 
@@ -96,7 +96,7 @@ def obter_dados_expedicao(cliente, spreadsheet_id):
     df = pd.DataFrame(dados[1:], columns=dados[0])
     df.columns = df.columns.str.strip()
 
-    # ✨ ALTERADO: Usando o caractere de acento agudo (´) que você colou
+    # Usando o caractere de acento agudo (´)
     colunas_necessarias = ['LT', 'Nome do Motorista', 'DOCA', "TO´s"]
     for col in colunas_necessarias:
         if col not in df.columns:
@@ -110,20 +110,20 @@ def montar_mensagem_alerta(df):
     """Monta a mensagem de alerta para TODAS as LTs na aba 'Reporte prioridade'."""
     
     if df.empty:
-        return None # Nada para alertar
+        return None
 
     mensagens = []
     
     mensagens.append(f"⚠️ Atenção Prioridade de descarga!")
-    mensagens.append("") # Linha em branco
-    mensagens.append("") # Linha em branco
+    mensagens.append("")
+    mensagens.append("")
 
     for _, row in df.iterrows():
         lt = row['LT'].strip()
         motorista = row['Nome do Motorista'].strip()
         doca = formatar_doca(row['DOCA'])
         
-        # ✨ ALTERADO: Usando o nome da coluna com acento agudo
+        # Usando o nome da coluna com acento agudo
         tos = row["TO´s"].strip()
         
         mensagens.append(f"🚛 {lt}")
@@ -134,7 +134,7 @@ def montar_mensagem_alerta(df):
         mensagens.append("") 
 
     if mensagens and mensagens[-1] == "":
-        mensagens.pop() # Remove o último espaço em branco
+        mensagens.pop()
 
     return "\n".join(mensagens)
 
@@ -220,8 +220,11 @@ def main():
         print(f"🕒 Turno atual: {turno_atual}")
         print(f"👥 IDs configurados para este turno: {ids_para_marcar}")
 
-        enviar_imagem(webhook_url)
+        # ✨ ALTERADO: A mensagem de texto agora é enviada PRIMEIRO.
         enviar_webhook_com_mencao_oficial(mensagem, webhook_url, user_ids=ids_para_marcar)
+        
+        # ✨ ALTERADO: A imagem agora é enviada DEPOIS.
+        enviar_imagem(webhook_url)
     else:
         print("✅ Nenhuma LT na aba 'Reporte prioridade'. Nada enviado.")
 
