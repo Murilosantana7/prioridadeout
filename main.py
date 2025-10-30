@@ -23,7 +23,7 @@ TURNO_PARA_IDS = {
         "1268695707"   # Claudio Olivatto
     ],
     "Turno 2": [
-        "9356934188", # ⚠️ SUBSTITUA PELO ID REAL DO FABRÍCIO DAMASCENO
+        "9356934188",  # Fabrício Damasceno
         "1386559133",  # Murilo Santana
         "1298055860"   # Matheus Damas
     ],
@@ -106,11 +106,27 @@ def obter_dados_expedicao(cliente, spreadsheet_id):
 
 
 def montar_mensagem_alerta(df):
-    agora = datetime.now(timezone('America/Sao_Paulo')).replace(tzinfo=None)
+    tz = timezone('America/Sao_Paulo')
+    agora = datetime.now(tz)
 
     df = df.copy()
+
+    # Converte CPT para datetime, assumindo formato brasileiro
+    df['CPT'] = pd.to_datetime(df['CPT'], dayfirst=True, errors='coerce')
+    df = df.dropna(subset=['CPT'])
+
+    # Força fuso horário em CPT
+    df['CPT'] = df['CPT'].dt.tz_localize(tz, ambiguous='NaT', nonexistent='NaT')
+    df = df.dropna(subset=['CPT'])
+
+    # Calcula minutos restantes
     df['minutos_restantes'] = ((df['CPT'] - agora).dt.total_seconds() // 60).astype(int)
-    df_filtrado = df[df['minutos_restantes'].isin(MINUTOS_ALERTA)]
+
+    # Filtra: exatamente 30/20/10min e no futuro
+    df_filtrado = df[
+        (df['minutos_restantes'].isin(MINUTOS_ALERTA)) &
+        (df['minutos_restantes'] >= 0)
+    ]
 
     if df_filtrado.empty:
         return None
@@ -125,7 +141,7 @@ def montar_mensagem_alerta(df):
                 lt = row['LH Trip Number'].strip()
                 destino = row['Station Name'].strip()
                 doca = formatar_doca(row['Doca'])
-                cpt_str = row['CPT'].strftime('%H:%M')
+                cpt_str = row['CPT'].strftime('%d/%m %H:%M')  # Mostra data + hora
                 mensagens.append(f"🚛 {lt} | {doca} | Destino: {destino} | CPT: {cpt_str}")
             mensagens.append("")
 
@@ -177,8 +193,7 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
     }
 
     if user_ids:
-        # Filtra apenas IDs válidos (remove placeholders ou vazios)
-        user_ids_validos = [uid for uid in user_ids if uid and uid != "ID_FABRICIO"]
+        user_ids_validos = [uid for uid in user_ids if uid and uid.strip()]
         if user_ids_validos:
             payload["text"]["mentioned_list"] = user_ids_validos
             print(f"✅ Enviando menção para: {user_ids_validos}")
@@ -213,17 +228,13 @@ def main():
     mensagem = montar_mensagem_alerta(df)
 
     if mensagem:
-        # 1. Identifica turno atual
         turno_atual = identificar_turno_atual()
         ids_para_marcar = TURNO_PARA_IDS.get(turno_atual, [])
 
         print(f"🕒 Turno atual: {turno_atual}")
         print(f"👥 IDs configurados para este turno: {ids_para_marcar}")
 
-        # 2. Envia imagem
         enviar_imagem(webhook_url)
-
-        # 3. Envia mensagem com marcação dinâmica
         enviar_webhook_com_mencao_oficial(mensagem, webhook_url, user_ids=ids_para_marcar)
     else:
         print("✅ Nenhuma LT nos critérios de alerta. Nada enviado.")
