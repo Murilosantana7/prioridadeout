@@ -2,3 +2,4 @@ pandas
 gspread
 requests
 pytz
+Pillow
