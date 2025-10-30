@@ -4,15 +4,20 @@ import requests
 import time
 import base64
 from datetime import datetime, timedelta
-from pytz import timezone
+from pytz import timezone # Importação correta
 import os
 import json
 
 # --- CONSTANTES ---
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 NOME_ABA = 'Reporte prioridade'
-INTERVALO = 'A:E'
+INTERVALO = 'A:F'  # CORRIGIDO: Até a Coluna F para pegar o ETA
 CAMINHO_IMAGEM = "alerta.gif"
+
+# Constantes de Fuso Horário e Formato de Data
+FUSO_HORARIO_SP = timezone('America/Sao_Paulo')
+# ATENÇÃO: Formato da planilha (ex: 31/10/2025 09:00)
+FORMATO_ETA = '%d/%m/%Y %H:%M' 
 
 # 👥 DICIONÁRIO DE PESSOAS POR TURNO (COM IDS REAIS!)
 TURNO_PARA_IDS = {
@@ -34,9 +39,8 @@ TURNO_PARA_IDS = {
 }
 
 
-def identificar_turno_atual():
+def identificar_turno_atual(agora):
     """Identifica o turno atual baseado na hora de São Paulo."""
-    agora = datetime.now(timezone('America/Sao_Paulo'))
     hora = agora.hour
 
     if 6 <= hora < 14:
@@ -96,20 +100,53 @@ def obter_dados_expedicao(cliente, spreadsheet_id):
     df = pd.DataFrame(dados[1:], columns=dados[0])
     df.columns = df.columns.str.strip()
 
-    # Usando o caractere de acento agudo (´)
-    colunas_necessarias = ['LT', 'Nome do Motorista', 'DOCA', "TO´s"]
+    # ALTERADO: Nome da coluna "Próximo ETA"
+    colunas_necessarias = ['LT', 'Nome do Motorista', 'DOCA', "TO´s", 'Próximo ETA']
     for col in colunas_necessarias:
         if col not in df.columns:
+            # Mensagem de erro específica se a coluna 'Próximo ETA' não for encontrada
+            if col == 'Próximo ETA':
+                return None, f"⚠️ Coluna '{col}' não encontrada. Verifique se o nome está correto na planilha e se o 'INTERVALO' (A:F) está certo."
             return None, f"⚠️ Coluna '{col}' não encontrada na aba '{NOME_ABA}'."
 
     df = df[df['LT'].str.strip() != '']
     return df, None
 
 
-def montar_mensagem_alerta(df):
-    """Monta a mensagem de alerta para TODAS as LTs na aba 'Reporte prioridade'."""
+def formatar_tempo_restante(eta_datetime, agora):
+    """Calcula e formata o tempo restante ou atraso."""
+    if not eta_datetime:
+        return "" # Se não há ETA, não retorna nada
+
+    diferenca = eta_datetime - agora
+    total_minutos = int(diferenca.total_seconds() / 60)
+
+    if total_minutos < 0:
+        # Atrasado
+        minutos_atraso = abs(total_minutos)
+        if minutos_atraso < 60:
+            return f"(Atrasado {minutos_atraso} min)"
+        else:
+            horas_atraso = minutos_atraso // 60
+            min_restantes = minutos_atraso % 60
+            return f"(Atrasado {horas_atraso}h {min_restantes}min)"
+    elif total_minutos == 0:
+        return "(Chegando agora)"
+    else:
+        # Faltam
+        if total_minutos < 60:
+            return f"(Faltam {total_minutos} min)"
+        else:
+            horas = total_minutos // 60
+            minutos = total_minutos % 60
+            return f"(Faltam {horas}h {minutos}min)"
+
+
+def montar_mensagem_alerta(df_filtrado, agora): # Recebe o DF já filtrado
+    """Monta a mensagem de alerta para as LTs filtradas."""
     
-    if df.empty:
+    # Esta verificação agora é uma segurança extra
+    if df_filtrado.empty:
         return None
 
     mensagens = []
@@ -118,18 +155,33 @@ def montar_mensagem_alerta(df):
     mensagens.append("")
     mensagens.append("")
 
-    for _, row in df.iterrows():
+    for _, row in df_filtrado.iterrows():
         lt = row['LT'].strip()
         motorista = row['Nome do Motorista'].strip()
         doca = formatar_doca(row['DOCA'])
-        
-        # Usando o nome da coluna com acento agudo
         tos = row["TO´s"].strip()
         
+        # ALTERADO: Usando a coluna 'Próximo ETA'
+        eta_str = row['Próximo ETA'].strip()
+        eta_datetime = None
+        eta_formatado = "--:--" # Valor padrão
+        tempo_restante_str = ""
+
+        if eta_str:
+            try:
+                eta_naive = datetime.strptime(eta_str, FORMATO_ETA)
+                eta_datetime = FUSO_HORARIO_SP.localize(eta_naive)
+                eta_formatado = eta_datetime.strftime('%d/%m %H:%M')
+                tempo_restante_str = formatar_tempo_restante(eta_datetime, agora)
+            except ValueError:
+                eta_formatado = f"{eta_str} (Formato?)"
+                print(f"⚠️ Aviso: Formato de data/hora inválido para ETA: '{eta_str}'. Esperado: '{FORMATO_ETA}'")
+
         mensagens.append(f"🚛 {lt}")
         mensagens.append(f"{doca}")
         mensagens.append(f"Motorista: {motorista}")
         mensagens.append(f"Qntd de TO´s: {tos}")
+        mensagens.append(f"ETA: {eta_formatado} {tempo_restante_str}") # Linha do ETA
         
         mensagens.append("") 
 
@@ -168,13 +220,9 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         return
 
     mensagem_final = f"{mensagem_texto}"
-
     payload = {
         "tag": "text",
-        "text": {
-            "format": 1,
-            "content": mensagem_final
-        }
+        "text": { "format": 1, "content": mensagem_final }
     }
 
     if user_ids:
@@ -206,27 +254,68 @@ def main():
     if not cliente:
         return
 
-    df, erro = obter_dados_expedicao(cliente, spreadsheet_id)
+    # Pega a hora atual aqui, UMA VEZ, com fuso horário
+    agora = datetime.now(FUSO_HORARIO_SP)
+
+    df_completo, erro = obter_dados_expedicao(cliente, spreadsheet_id)
     if erro:
         print(erro)
         return
+        
+    if df_completo.empty:
+        print("✅ Nenhuma LT na aba 'Reporte prioridade'. Nada enviado.")
+        return
 
-    mensagem = montar_mensagem_alerta(df)
+    # --- NOVO BLOCO DE FILTRO DE 10 HORAS ---
+    df_filtrado_lista = []
+    limite_em_horas = 10
+    # Limite é a hora atual + 10 horas
+    limite_alerta = agora + timedelta(hours=limite_em_horas) 
+
+    print(f"🕣 Hora atual: {agora.strftime('%d/%m %H:%M')}. Filtrando LTs com ETA até {limite_alerta.strftime('%d/%m %H:%M')}.")
+
+    for index, row in df_completo.iterrows():
+        # ALTERADO: Usando 'Próximo ETA'
+        eta_str = row['Próximo ETA'].strip() 
+        if not eta_str:
+            continue # Pula linhas sem ETA
+
+        try:
+            eta_naive = datetime.strptime(eta_str, FORMATO_ETA)
+            eta_datetime = FUSO_HORARIO_SP.localize(eta_naive)
+            
+            # A CONDIÇÃO: Enviar se o ETA for HOJE/AGORA ou DENTRO das próximas 10h
+            if eta_datetime <= limite_alerta:
+                df_filtrado_lista.append(row)
+            else:
+                print(f"ℹ️ LT {row['LT']} ignorada. ETA ({eta_datetime.strftime('%H:%M')}) está fora da janela de {limite_em_horas}h.")
+
+        except ValueError:
+            print(f"⚠️ Aviso (Filtro): Formato de data/hora inválido para ETA: '{eta_str}'. Pulando linha {index}.")
+    
+    if not df_filtrado_lista:
+        print(f"✅ Nenhuma LT encontrada com ETA dentro de {limite_em_horas} horas. Nada enviado.")
+        return
+    
+    # Converte a lista de linhas filtradas de volta para um DataFrame
+    df_filtrado = pd.DataFrame(df_filtrado_lista)
+    # --- FIM DO BLOCO DE FILTRO ---
+
+
+    # Passa o DataFrame JÁ FILTRADO para montar a mensagem
+    mensagem = montar_mensagem_alerta(df_filtrado, agora) 
 
     if mensagem:
-        turno_atual = identificar_turno_atual()
+        turno_atual = identificar_turno_atual(agora) 
         ids_para_marcar = TURNO_PARA_IDS.get(turno_atual, [])
 
-        print(f"🕒 Turno atual: {turno_atual}")
+        print(f"🕒 Turno atual: {turno_atual} (Hora: {agora.strftime('%H:%M')})")
         print(f"👥 IDs configurados para este turno: {ids_para_marcar}")
 
-        # ✨ ALTERADO: A mensagem de texto agora é enviada PRIMEIRO.
         enviar_webhook_com_mencao_oficial(mensagem, webhook_url, user_ids=ids_para_marcar)
-        
-        # ✨ ALTERADO: A imagem agora é enviada DEPOIS.
         enviar_imagem(webhook_url)
-    else:
-        print("✅ Nenhuma LT na aba 'Reporte prioridade'. Nada enviado.")
+    
+    # (O 'else' anterior foi removido pois o filtro já trata LTs vazias)
 
 
 if __name__ == "__main__":
