@@ -11,7 +11,6 @@ import json
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 NOME_ABA = 'Base Pending Tratado'
 INTERVALO = 'A:F'
-USER_ID_LUIS = "1508081817"  # ← ID DO LUIS TIBÉRIO
 
 
 def autenticar_google():
@@ -83,7 +82,13 @@ def montar_mensagem_alerta(df):
     if df_filtrado.empty:
         return None
 
-    mensagens = ["📋 LISTA DE LTs NAS PRÓXIMAS 4H\n"]
+    mensagens = []
+
+    # 👇👇👇 INCLUI A MENÇÃO VISUAL NO TOPO 👇👇👇
+    mensagens.append("@Luis Tiberio | COP | SOC SP5")
+    mensagens.append("")
+    mensagens.append("🚨 ALERTA DE CPT IMINENTE")
+    mensagens.append("📋 LISTA DE LTs NAS PRÓXIMAS 4H\n")
 
     # Ordena por CPT (mais cedo primeiro)
     df_filtrado = df_filtrado.sort_values('CPT')
@@ -107,37 +112,26 @@ def montar_mensagem_alerta(df):
     return "\n".join(mensagens)
 
 
-def enviar_webhook_com_mencao(mensagem_texto: str, webhook_url: str, user_id: str = "1508081817"):
+def enviar_webhook(mensagem_texto: str, webhook_url: str):
     """
-    Envia mensagem com menção REAL pelo ID, usando requests.
+    Envia mensagem simples de texto (formato 1) — mais compatível.
     """
     if not webhook_url:
         print("❌ WEBHOOK_URL não definida.")
         return
 
-    texto_base = "🚨 ALERTA DE CPT IMINENTE<at id=\"{user_id}\"></at>"
-    mensagem_completa = f"{texto_base}\n\n{mensagem_texto}"
-    offset = len("🚨 ALERTA DE CPT IMINENTE")  # Calcula automaticamente
-
     payload = {
         "tag": "text",
         "text": {
-            "format": 2,
-            "content": mensagem_completa.format(user_id=user_id),
-            "at_list": [
-                {
-                    "id": user_id,
-                    "len": 0,
-                    "offset": offset
-                }
-            ]
+            "format": 1,  # ← Simples e confiável
+            "content": mensagem_texto
         }
     }
 
     try:
         response = requests.post(webhook_url, json=payload)
         response.raise_for_status()
-        print("✅ Mensagem com menção REAL enviada com sucesso.")
+        print("✅ Mensagem enviada com sucesso.")
     except Exception as e:
         print(f"❌ Falha ao enviar mensagem: {e}")
 
@@ -162,7 +156,7 @@ def main():
     mensagem = montar_mensagem_alerta(df)
 
     if mensagem:
-        enviar_webhook_com_mencao(mensagem, webhook_url, USER_ID_LUIS)
+        enviar_webhook(mensagem, webhook_url)
     else:
         print("✅ Nenhuma LT nas próximas 4h. Nada enviado.")
 
