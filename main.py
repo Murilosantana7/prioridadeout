@@ -195,11 +195,32 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         print("❌ WEBHOOK_URL não definida.")
         return
 
+    # Mapa de IDs para nomes amigáveis
+    mencoes_visuais = {
+        "1461929762": "@Iromar Souza",
+        "9465967606": "@Fidel Lúcio",
+        "1268695707": "@Claudio Olivatto",
+        "9356934188": "@Fabrício Damasceno | SOC SP05",
+        "1386559133": "@Murilo Santana",
+        "1298055860": "@Matheus Damas",
+        "9289770437": "@Fernando Aparecido da Costa",
+        "9474534910": "@Kaio Baldo",
+        "1499919880": "@Sandor Nemes"
+    }
+
+    mencoes_texto = ""
+    if user_ids:
+        nomes = [mencoes_visuais.get(uid, f"@ID{uid}") for uid in user_ids if uid.strip()]
+        mencoes_texto = " ".join(nomes)
+
+    # ✨ FORMATAÇÃO MELHORADA: espaços entre marcações e alerta
+    mensagem_final = f"{mencoes_texto}\n\n{mensagem_texto}"
+
     payload = {
         "tag": "text",
         "text": {
             "format": 1,
-            "content": mensagem_texto
+            "content": mensagem_final
         }
     }
 
