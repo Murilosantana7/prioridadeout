@@ -2,6 +2,7 @@ import pandas as pd
 import gspread
 import requests
 import time
+import base64
 from datetime import datetime, timedelta
 from pytz import timezone
 import os
@@ -11,7 +12,40 @@ import json
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 NOME_ABA = 'Base Pending Tratado'
 INTERVALO = 'A:F'
-USER_ID_LUIS = "1508081817"  # ← ID DO LUIS TIBÉRIO (CONFIRMADO!)
+MINUTOS_ALERTA = [30, 20, 10]
+CAMINHO_IMAGEM = "alerta.gif"
+
+# 👥 DICIONÁRIO DE PESSOAS POR TURNO (COM IDS REAIS!)
+TURNO_PARA_IDS = {
+    "Turno 1": [
+        "1461929762",  # Iromar Souza
+        "9465967606",  # Fidel Lúcio
+        "1268695707"   # Claudio Olivatto
+    ],
+    "Turno 2": [
+        "9356934188", # ⚠️ SUBSTITUA PELO ID REAL DO FABRÍCIO DAMASCENO
+        "1386559133",  # Murilo Santana
+        "1298055860"   # Matheus Damas
+    ],
+    "Turno 3": [
+        "9289770437",  # Fernando Aparecido da Costa
+        "9474534910",  # Kaio Baldo
+        "1499919880"   # Sandor Nemes
+    ]
+}
+
+
+def identificar_turno_atual():
+    """Identifica o turno atual baseado na hora de São Paulo."""
+    agora = datetime.now(timezone('America/Sao_Paulo'))
+    hora = agora.hour
+
+    if 6 <= hora < 14:
+        return "Turno 1"
+    elif 14 <= hora < 22:
+        return "Turno 2"
+    else:
+        return "Turno 3"
 
 
 def autenticar_google():
@@ -76,43 +110,60 @@ def montar_mensagem_alerta(df):
 
     df = df.copy()
     df['minutos_restantes'] = ((df['CPT'] - agora).dt.total_seconds() // 60).astype(int)
-
-    # FILTRO: todas as LTs que estão nas próximas 4h (0 a 240 minutos)
-    df_filtrado = df[(df['minutos_restantes'] >= 0) & (df['minutos_restantes'] <= 240)]
+    df_filtrado = df[df['minutos_restantes'].isin(MINUTOS_ALERTA)]
 
     if df_filtrado.empty:
         return None
 
     mensagens = []
-    mensagens.append("🚨 ALERTA DE CPT IMINENTE")
-    mensagens.append("📋 LISTA DE LTs NAS PRÓXIMAS 4H\n")
+    for minuto in sorted(MINUTOS_ALERTA, reverse=True):
+        grupo = df_filtrado[df_filtrado['minutos_restantes'] == minuto]
+        if not grupo.empty:
+            mensagens.append(f"⚠️ Atenção!!!")
+            mensagens.append(f"{minuto}min para o CPT.\n")
+            for _, row in grupo.iterrows():
+                lt = row['LH Trip Number'].strip()
+                destino = row['Station Name'].strip()
+                doca = formatar_doca(row['Doca'])
+                cpt_str = row['CPT'].strftime('%H:%M')
+                mensagens.append(f"🚛 {lt} | {doca} | Destino: {destino} | CPT: {cpt_str}")
+            mensagens.append("")
 
-    # Ordena por CPT (mais cedo primeiro)
-    df_filtrado = df_filtrado.sort_values('CPT')
-
-    for _, row in df_filtrado.iterrows():
-        lt = row['LH Trip Number'].strip()
-        destino = row['Station Name'].strip()
-        doca = formatar_doca(row['Doca'])
-        cpt_str = row['CPT'].strftime('%H:%M')
-        minutos = int(row['minutos_restantes'])
-
-        if minutos <= 10:
-            icone = "❗️"
-        elif minutos <= 30:
-            icone = "⚠️"
-        else:
-            icone = "✅"
-
-        mensagens.append(f"{icone} {lt} | {doca} | Destino: {destino} | CPT: {cpt_str} | Faltam {minutos} min")
+    if mensagens and mensagens[-1] == "":
+        mensagens.pop()
 
     return "\n".join(mensagens)
 
 
+def enviar_imagem(webhook_url: str, caminho_imagem: str = CAMINHO_IMAGEM):
+    if not webhook_url:
+        print("❌ WEBHOOK_URL não definida.")
+        return False
+
+    try:
+        with open(caminho_imagem, "rb") as f:
+            raw_image_content = f.read()
+            base64_encoded_image = base64.b64encode(raw_image_content).decode("utf-8")
+
+        payload = {
+            "tag": "image",
+            "image_base64": {"content": base64_encoded_image}
+        }
+
+        response = requests.post(webhook_url, json=payload)
+        response.raise_for_status()
+        print("✅ Imagem enviada com sucesso.")
+        return True
+
+    except FileNotFoundError:
+        print(f"❌ Arquivo '{caminho_imagem}' não encontrado. Pulando imagem...")
+        return False
+    except Exception as e:
+        print(f"❌ Erro ao enviar imagem: {e}")
+        return False
+
+
 def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, user_ids: list = None):
-    """
-    Envia mensagem com menção OFICIAL via mentioned_list (formato moderno do SeaTalk).
-    """
     if not webhook_url:
         print("❌ WEBHOOK_URL não definida.")
         return
@@ -125,9 +176,14 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         }
     }
 
-    # 👇👇👇 ADICIONA A LISTA DE USUÁRIOS A SEREM MARCADOS 👇👇👇
     if user_ids:
-        payload["text"]["mentioned_list"] = user_ids
+        # Filtra apenas IDs válidos (remove placeholders ou vazios)
+        user_ids_validos = [uid for uid in user_ids if uid and uid != "ID_FABRICIO"]
+        if user_ids_validos:
+            payload["text"]["mentioned_list"] = user_ids_validos
+            print(f"✅ Enviando menção para: {user_ids_validos}")
+        else:
+            print("⚠️ Nenhum ID válido para marcar.")
 
     try:
         response = requests.post(webhook_url, json=payload)
@@ -135,7 +191,6 @@ def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, use
         print("✅ Mensagem com menção OFICIAL enviada com sucesso.")
     except Exception as e:
         print(f"❌ Falha ao enviar mensagem: {e}")
-        print(f"   Payload enviado: {payload}")  # Para debug
 
 
 def main():
@@ -158,10 +213,20 @@ def main():
     mensagem = montar_mensagem_alerta(df)
 
     if mensagem:
-        # 👇👇👇 ENVIA COM MENÇÃO OFICIAL AO LUIS TIBÉRIO 👇👇👇
-        enviar_webhook_com_mencao_oficial(mensagem, webhook_url, user_ids=[USER_ID_LUIS])
+        # 1. Identifica turno atual
+        turno_atual = identificar_turno_atual()
+        ids_para_marcar = TURNO_PARA_IDS.get(turno_atual, [])
+
+        print(f"🕒 Turno atual: {turno_atual}")
+        print(f"👥 IDs configurados para este turno: {ids_para_marcar}")
+
+        # 2. Envia imagem
+        enviar_imagem(webhook_url)
+
+        # 3. Envia mensagem com marcação dinâmica
+        enviar_webhook_com_mencao_oficial(mensagem, webhook_url, user_ids=ids_para_marcar)
     else:
-        print("✅ Nenhuma LT nas próximas 4h. Nada enviado.")
+        print("✅ Nenhuma LT nos critérios de alerta. Nada enviado.")
 
 
 if __name__ == "__main__":
