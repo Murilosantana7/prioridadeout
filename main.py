@@ -22,7 +22,8 @@ FORMATO_ETA = '%d/%m/%Y %H:%M:%S'
 # 👥 DICIONÁRIO DE PESSOAS POR TURNO (COM IDS REAIS!)
 TURNO_PARA_IDS = {
     "Turno 1": [
-        "1285879030",  # Priscila Cristofaro
+       # "1285879030",  # Priscila Cristofaro - férias
+        "1323672252",  # Leticia Tena
         "9465967606",  # Fidel Lúcio
         "1268695707"   # Claudio Olivatto
     ],
