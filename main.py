@@ -28,6 +28,7 @@ TURNO_PARA_IDS = {
     ],
     "Turno 2": [
         "9260655622",  # Mariane Marquezini
+        "1311194991",  # Cinara Lopes
         "1386559133",  # Murilo Santana
         "1298055860"   # Matheus Damas
     ],
