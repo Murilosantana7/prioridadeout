@@ -17,7 +17,7 @@ CAMINHO_IMAGEM = "alerta.gif"
 # Constantes de Fuso Horário e Formato de Data
 FUSO_HORARIO_SP = timezone('America/Sao_Paulo')
 # ATENÇÃO: Formato da planilha (ex: 31/10/2025 09:00)
-FORMATO_ETA = '%d/%m/%Y %H:%M' 
+FORMATO_ETA = '%d/%m/%Y %H:%M:%S' 
 
 # 👥 DICIONÁRIO DE PESSOAS POR TURNO (COM IDS REAIS!)
 TURNO_PARA_IDS = {
