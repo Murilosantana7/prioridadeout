@@ -25,7 +25,8 @@ TURNO_PARA_IDS = {
        # "1285879030",  # Priscila Cristofaro - férias
         "1323672252",  # Leticia Tena
         "9465967606",  # Fidel Lúcio
-        "1268695707"   # Claudio Olivatto
+        "1268695707",  # Claudio Olivatto
+        "1361341535"   # Iran Castro
     ],
     "Turno 2": [
         "9260655622",  # Mariane Marquezini
@@ -34,7 +35,7 @@ TURNO_PARA_IDS = {
         "1298055860"   # Matheus Damas
     ],
     "Turno 3": [
-        "1210347148",  # Fernando Aparecido da Costa
+        "1210347148",  # Danilo Pereira
         "9474534910",  # Kaio Baldo
         "1499919880"   # Sandor Nemes
     ]
