@@ -4,25 +4,22 @@ import requests
 import time
 import base64
 from datetime import datetime, timedelta
-from pytz import timezone # Importação correta
+from pytz import timezone
 import os
 import json
 
-# --- CONSTANTES ---
+# --- CONSTANTES GERAIS ---
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 NOME_ABA = 'Reporte prioridade'
-INTERVALO = 'A:F'  # CORRIGIDO: Até a Coluna F para pegar o ETA
+INTERVALO = 'A:F'
 CAMINHO_IMAGEM = "alerta.gif"
 
-# Constantes de Fuso Horário e Formato de Data
+# --- FUSO HORÁRIO ---
 FUSO_HORARIO_SP = timezone('America/Sao_Paulo')
-# ATENÇÃO: Formato da planilha (ex: 31/10/2025 09:00)
-FORMATO_ETA = '%d/%m/%Y %H:%M:%S' 
 
-# 👥 DICIONÁRIO DE PESSOAS POR TURNO (COM IDS REAIS!)
+# --- CONFIGURAÇÃO DE TURNOS E IDS ---
 TURNO_PARA_IDS = {
     "Turno 1": [
-       # "1285879030",  # Priscila Cristofaro - férias
         "1323672252",  # Leticia Tena
         "9465967606",  # Fidel Lúcio
         "1268695707",  # Claudio Olivatto
@@ -41,11 +38,30 @@ TURNO_PARA_IDS = {
     ]
 }
 
+# --- CONFIGURAÇÃO DE FOLGAS (0=Segunda ... 6=Domingo) ---
+# 0=Seg, 1=Ter, 2=Qua, 3=Qui, 4=Sex, 5=Sab, 6=Dom
+DIAS_DE_FOLGA = {
+    # Turno 1
+    "1323672252": [6, 0], # Leticia (Dom, Seg)
+    "9465967606": [5, 6], # Fidel (Sab, Dom)
+    "1268695707": [6],    # Claudio (Dom)
+    "1361341535": [6],    # Iran (Dom)
+
+    # Turno 2
+    "9260655622": [5, 6], # Mariane (Sab, Dom)
+    "1311194991": [6, 0], # Cinara (Dom, Seg)
+    "1386559133": [6, 0], # Murilo (Dom, Seg)
+    "1298055860": [6],    # Matheus (Dom)
+
+    # Turno 3
+    "1210347148": [5, 6], # Danilo (Sab, Dom)
+    "9474534910": [6, 0], # Kaio (Dom, Seg)
+    "1499919880": []      # Sandor (Sem folga fixa)
+}
 
 def identificar_turno_atual(agora):
     """Identifica o turno atual baseado na hora de São Paulo."""
     hora = agora.hour
-
     if 6 <= hora < 14:
         return "Turno 1"
     elif 14 <= hora < 22:
@@ -53,14 +69,30 @@ def identificar_turno_atual(agora):
     else:
         return "Turno 3"
 
+def filtrar_quem_esta_de_folga(ids_do_turno, agora):
+    """Remove da lista de IDs quem tem folga no dia da semana atual."""
+    dia_semana_hoje = agora.weekday() # 0=Segunda ... 6=Domingo
+    ids_validos = []
+    
+    nomes_dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+    print(f"📅 Hoje é {nomes_dias[dia_semana_hoje]}. Verificando escalas...")
+
+    for uid in ids_do_turno:
+        dias_off_da_pessoa = DIAS_DE_FOLGA.get(uid, [])
+        
+        if dia_semana_hoje in dias_off_da_pessoa:
+            print(f"🏖️ ID {uid} está de folga hoje. Não será marcado.")
+        else:
+            ids_validos.append(uid)
+            
+    return ids_validos
 
 def autenticar_google():
     """Autentica com a API do Google."""
     creds_json_str = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
     if not creds_json_str:
-        print("❌ Erro: Variável de ambiente 'GOOGLE_SERVICE_ACCOUNT_JSON' não definida.")
+        print("❌ Erro: Variável 'GOOGLE_SERVICE_ACCOUNT_JSON' não definida.")
         return None
-
     try:
         creds_dict = json.loads(creds_json_str)
         cliente = gspread.service_account_from_dict(creds_dict, scopes=SCOPES)
@@ -70,94 +102,53 @@ def autenticar_google():
         print(f"❌ Erro ao autenticar: {e}")
         return None
 
-
 def formatar_doca(doca):
-    """Formata o texto da doca (função original)."""
     doca = doca.strip()
-    if not doca or doca == '-':
-        return "Doca --"
+    if not doca or doca == '-': return "Doca --"
     elif doca.startswith("EXT.OUT"):
         numeros = ''.join(filter(str.isdigit, doca))
         return f"Doca {numeros}"
-    elif not doca.startswith("Doca"):
-        return f"Doca {doca}"
-    else:
-        return doca
-
+    elif not doca.startswith("Doca"): return f"Doca {doca}"
+    else: return doca
 
 def obter_dados_expedicao(cliente, spreadsheet_id):
-    """Busca dados da planilha e trata as colunas da aba 'Reporte prioridade'."""
-    if not cliente:
-        return None, "⚠️ Cliente não autenticado."
-
+    if not cliente: return None, "⚠️ Cliente não autenticado."
     try:
         planilha = cliente.open_by_key(spreadsheet_id)
         aba = planilha.worksheet(NOME_ABA)
         dados = aba.get(INTERVALO)
-    except Exception as e:
-        return None, f"⚠️ Erro ao acessar planilha: {e}"
+    except Exception as e: return None, f"⚠️ Erro ao acessar planilha: {e}"
 
-    if not dados or len(dados) < 2:
-        return None, "⚠️ Nenhum dado encontrado."
+    if not dados or len(dados) < 2: return None, "⚠️ Nenhum dado encontrado."
 
     df = pd.DataFrame(dados[1:], columns=dados[0])
     df.columns = df.columns.str.strip()
 
-    # ALTERADO: Nome da coluna "Próximo ETA"
     colunas_necessarias = ['LT', 'Nome do Motorista', 'DOCA', "TO´s", 'Próximo ETA']
     for col in colunas_necessarias:
         if col not in df.columns:
-            # Mensagem de erro específica se a coluna 'Próximo ETA' não for encontrada
-            if col == 'Próximo ETA':
-                return None, f"⚠️ Coluna '{col}' não encontrada. Verifique se o nome está correto na planilha e se o 'INTERVALO' (A:F) está certo."
             return None, f"⚠️ Coluna '{col}' não encontrada na aba '{NOME_ABA}'."
 
     df = df[df['LT'].str.strip() != '']
     return df, None
 
-
 def formatar_tempo_restante(eta_datetime, agora):
-    """Calcula e formata o tempo restante ou atraso."""
-    if not eta_datetime:
-        return "" # Se não há ETA, não retorna nada
-
+    if not eta_datetime: return ""
     diferenca = eta_datetime - agora
     total_minutos = int(diferenca.total_seconds() / 60)
 
     if total_minutos < 0:
-        # Atrasado
         minutos_atraso = abs(total_minutos)
-        if minutos_atraso < 60:
-            return f"(Atrasado {minutos_atraso} min)"
-        else:
-            horas_atraso = minutos_atraso // 60
-            min_restantes = minutos_atraso % 60
-            return f"(Atrasado {horas_atraso}h {min_restantes}min)"
-    elif total_minutos == 0:
-        return "(Chegando agora)"
+        if minutos_atraso < 60: return f"(Atrasado {minutos_atraso} min)"
+        else: return f"(Atrasado {minutos_atraso // 60}h {minutos_atraso % 60}min)"
+    elif total_minutos == 0: return "(Chegando agora)"
     else:
-        # Faltam
-        if total_minutos < 60:
-            return f"(Faltam {total_minutos} min)"
-        else:
-            horas = total_minutos // 60
-            minutos = total_minutos % 60
-            return f"(Faltam {horas}h {minutos}min)"
+        if total_minutos < 60: return f"(Faltam {total_minutos} min)"
+        else: return f"(Faltam {total_minutos // 60}h {total_minutos % 60}min)"
 
-
-def montar_mensagem_alerta(df_filtrado, agora): # Recebe o DF já filtrado
-    """Monta a mensagem de alerta para as LTs filtradas."""
-    
-    # Esta verificação agora é uma segurança extra
-    if df_filtrado.empty:
-        return None
-
-    mensagens = []
-
-    mensagens.append("")
-    mensagens.append(f"⚠️ Atenção, Prioridade de descarga!⚠️")
-    mensagens.append("")
-    mensagens.append("")
+def montar_mensagem_alerta(df_filtrado, agora):
+    if df_filtrado.empty: return None
+    mensagens = ["", "⚠️ Atenção, Prioridade de descarga!⚠️", "", ""]
 
     for _, row in df_filtrado.iterrows():
         lt = row['LT'].strip()
@@ -165,41 +156,36 @@ def montar_mensagem_alerta(df_filtrado, agora): # Recebe o DF já filtrado
         doca = formatar_doca(row['DOCA'])
         tos = row["TO´s"].strip()
         
-        # ALTERADO: Usando a coluna 'Próximo ETA'
         eta_str = row['Próximo ETA'].strip()
-        eta_datetime = None
-        eta_formatado = "--:--" # Valor padrão
+        eta_formatado = "--:--"
         tempo_restante_str = ""
 
+        # Lógica de formatação robusta (com ou sem segundos)
         if eta_str:
             try:
-                eta_naive = datetime.strptime(eta_str, FORMATO_ETA)
+                try:
+                    eta_naive = datetime.strptime(eta_str, '%d/%m/%Y %H:%M:%S')
+                except ValueError:
+                    eta_naive = datetime.strptime(eta_str, '%d/%m/%Y %H:%M')
+                
                 eta_datetime = FUSO_HORARIO_SP.localize(eta_naive)
                 eta_formatado = eta_datetime.strftime('%d/%m %H:%M')
                 tempo_restante_str = formatar_tempo_restante(eta_datetime, agora)
             except ValueError:
-                eta_formatado = f"{eta_str} (Formato?)"
-                print(f"⚠️ Aviso: Formato de data/hora inválido para ETA: '{eta_str}'. Esperado: '{FORMATO_ETA}'")
-
+                eta_formatado = f"{eta_str} (?)"
+                
         mensagens.append(f"🚛 {lt}")
         mensagens.append(f"{doca}")
         mensagens.append(f"Motorista: {motorista}")
         mensagens.append(f"Qntd de TO´s: {tos}")
-        mensagens.append(f"ETA: {eta_formatado} {tempo_restante_str}") # Linha do ETA
-        
+        mensagens.append(f"ETA: {eta_formatado} {tempo_restante_str}")
         mensagens.append("") 
 
-    if mensagens and mensagens[-1] == "":
-        mensagens.pop()
-
+    if mensagens and mensagens[-1] == "": mensagens.pop()
     return "\n".join(mensagens)
 
-
 def enviar_imagem(webhook_url: str, caminho_imagem: str = CAMINHO_IMAGEM):
-    """Envia a imagem de alerta (função original)."""
-    if not webhook_url:
-        print("❌ WEBHOOK_URL não definida.")
-        return False
+    if not webhook_url: return False
     try:
         with open(caminho_imagem, "rb") as f:
             raw_image_content = f.read()
@@ -207,120 +193,89 @@ def enviar_imagem(webhook_url: str, caminho_imagem: str = CAMINHO_IMAGEM):
         payload = {"tag": "image", "image_base64": {"content": base64_encoded_image}}
         response = requests.post(webhook_url, json=payload)
         response.raise_for_status()
-        print("✅ Imagem enviada com sucesso.")
+        print("✅ Imagem enviada.")
         return True
-    except FileNotFoundError:
-        print(f"❌ Arquivo '{caminho_imagem}' não encontrado. Pulando imagem...")
-        return False
     except Exception as e:
-        print(f"❌ Erro ao enviar imagem: {e}")
+        print(f"❌ Erro imagem: {e}")
         return False
-
 
 def enviar_webhook_com_mencao_oficial(mensagem_texto: str, webhook_url: str, user_ids: list = None):
-    """Envia a mensagem de texto e marca os usuários (função original)."""
-    if not webhook_url:
-        print("❌ WEBHOOK_URL não definida.")
-        return
-
-    mensagem_final = f"{mensagem_texto}"
+    if not webhook_url: return
     payload = {
         "tag": "text",
-        "text": { "format": 1, "content": mensagem_final }
+        "text": { "format": 1, "content": mensagem_texto }
     }
-
     if user_ids:
-        user_ids_validos = [uid for uid in user_ids if uid and uid.strip()]
-        if user_ids_validos:
-            payload["text"]["mentioned_list"] = user_ids_validos
-            print(f"✅ Enviando menção para: {user_ids_validos}")
-        else:
-            print("⚠️ Nenhum ID válido para marcar.")
-
+        payload["text"]["mentioned_list"] = user_ids
+        print(f"✅ Marcando IDs: {user_ids}")
+    
     try:
-        response = requests.post(webhook_url, json=payload)
-        response.raise_for_status()
-        print("✅ Mensagem com menção OFICIAL enviada com sucesso.")
-    except Exception as e:
-        print(f"❌ Falha ao enviar mensagem: {e}")
-
+        requests.post(webhook_url, json=payload).raise_for_status()
+        print("✅ Mensagem enviada.")
+    except Exception as e: print(f"❌ Erro envio msg: {e}")
 
 def main():
-    """Função principal para rodar o bot."""
     webhook_url = os.environ.get('SEATALK_WEBHOOK_URL')
     spreadsheet_id = os.environ.get('SPREADSHEET_ID')
 
     if not webhook_url or not spreadsheet_id:
-        print("❌ Variáveis SEATALK_WEBHOOK_URL ou SPREADSHEET_ID não definidas.")
+        print("❌ Variáveis de ambiente faltando.")
         return
 
     cliente = autenticar_google()
-    if not cliente:
-        return
+    if not cliente: return
 
-    # Pega a hora atual aqui, UMA VEZ, com fuso horário
     agora = datetime.now(FUSO_HORARIO_SP)
-
     df_completo, erro = obter_dados_expedicao(cliente, spreadsheet_id)
     if erro:
         print(erro)
         return
-        
+    
     if df_completo.empty:
-        print("✅ Nenhuma LT na aba 'Reporte prioridade'. Nada enviado.")
+        print("✅ Nenhuma LT encontrada.")
         return
 
-    # --- NOVO BLOCO DE FILTRO DE 10 HORAS ---
+    # --- FILTRO DE 10 HORAS COM PROTEÇÃO DE DATA ---
     df_filtrado_lista = []
-    limite_em_horas = 10
-    # Limite é a hora atual + 10 horas
-    limite_alerta = agora + timedelta(hours=limite_em_horas) 
-
-    print(f"🕣 Hora atual: {agora.strftime('%d/%m %H:%M')}. Filtrando LTs com ETA até {limite_alerta.strftime('%d/%m %H:%M')}.")
+    limite_alerta = agora + timedelta(hours=10) 
+    print(f"🕣 Hora: {agora.strftime('%d/%m %H:%M')}. Filtro até: {limite_alerta.strftime('%d/%m %H:%M')}")
 
     for index, row in df_completo.iterrows():
-        # ALTERADO: Usando 'Próximo ETA'
         eta_str = row['Próximo ETA'].strip() 
-        if not eta_str:
-            continue # Pula linhas sem ETA
+        if not eta_str: continue
 
         try:
-            eta_naive = datetime.strptime(eta_str, FORMATO_ETA)
+            # Tenta formato completo, se falhar tenta sem segundos
+            try:
+                eta_naive = datetime.strptime(eta_str, '%d/%m/%Y %H:%M:%S')
+            except ValueError:
+                eta_naive = datetime.strptime(eta_str, '%d/%m/%Y %H:%M')
+            
             eta_datetime = FUSO_HORARIO_SP.localize(eta_naive)
             
-            # A CONDIÇÃO: Enviar se o ETA for HOJE/AGORA ou DENTRO das próximas 10h
             if eta_datetime <= limite_alerta:
                 df_filtrado_lista.append(row)
-            else:
-                print(f"ℹ️ LT {row['LT']} ignorada. ETA ({eta_datetime.strftime('%H:%M')}) está fora da janela de {limite_em_horas}h.")
-
         except ValueError:
-            print(f"⚠️ Aviso (Filtro): Formato de data/hora inválido para ETA: '{eta_str}'. Pulando linha {index}.")
+            print(f"⚠️ Data inválida na linha {index}: '{eta_str}'")
     
     if not df_filtrado_lista:
-        print(f"✅ Nenhuma LT encontrada com ETA dentro de {limite_em_horas} horas. Nada enviado.")
+        print("✅ Nenhuma LT urgente encontrada.")
         return
     
-    # Converte a lista de linhas filtradas de volta para um DataFrame
     df_filtrado = pd.DataFrame(df_filtrado_lista)
-    # --- FIM DO BLOCO DE FILTRO ---
-
-
-    # Passa o DataFrame JÁ FILTRADO para montar a mensagem
     mensagem = montar_mensagem_alerta(df_filtrado, agora) 
 
     if mensagem:
         turno_atual = identificar_turno_atual(agora) 
-        ids_para_marcar = TURNO_PARA_IDS.get(turno_atual, [])
+        ids_brutos = TURNO_PARA_IDS.get(turno_atual, [])
 
-        print(f"🕒 Turno atual: {turno_atual} (Hora: {agora.strftime('%H:%M')})")
-        print(f"👥 IDs configurados para este turno: {ids_para_marcar}")
+        # --- APLICA FILTRO DE FOLGAS ---
+        ids_para_marcar = filtrar_quem_esta_de_folga(ids_brutos, agora)
+        # -------------------------------
 
+        print(f"🕒 Turno: {turno_atual}")
         enviar_webhook_com_mencao_oficial(mensagem, webhook_url, user_ids=ids_para_marcar)
         enviar_imagem(webhook_url)
-    
-    # (O 'else' anterior foi removido pois o filtro já trata LTs vazias)
-
 
 if __name__ == "__main__":
     main()
