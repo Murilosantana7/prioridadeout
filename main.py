@@ -45,7 +45,7 @@ DIAS_DE_FOLGA = {
     "1323672252": [6, 0], # Leticia (Dom, Seg)
     "9465967606": [5, 6], # Fidel (Sab, Dom)
     "1268695707": [6],    # Claudio (Dom)
-    "1361341535": [6],    # Iran (Dom)
+    "1361341535": [6, 0],    # Iran (Dom, Seg)
 
     # Turno 2
     "9260655622": [5, 6], # Mariane (Sab, Dom)
