@@ -54,9 +54,9 @@ DIAS_DE_FOLGA = {
     "1298055860": [6],    # Matheus (Dom)
 
     # Turno 3
-    "1210347148": [5, 6], # Danilo (Sab, Dom)
-    "9474534910": [6, 0], # Kaio (Dom, Seg)
-    "1499919880": []      # Sandor (Sem folga fixa)
+    "1210347148": [5, 6],  # Danilo (Sab, Dom)
+    "9474534910": [6, 0],  # Kaio (Dom, Seg)
+    "1499919880": [6]      # Sandor (Dom)
 }
 
 def identificar_turno_atual(agora):
