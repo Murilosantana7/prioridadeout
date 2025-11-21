@@ -45,7 +45,7 @@ DIAS_DE_FOLGA = {
     "1323672252": [6, 0], # Leticia (Dom, Seg)
     "9465967606": [5, 6], # Fidel (Sab, Dom)
     "1268695707": [6],    # Claudio (Dom)
-    "1361341535": [6, 0],    # Iran (Dom, Seg)
+    "1361341535": [6, 0], # Iran (Dom, Seg)
 
     # Turno 2
     "9260655622": [5, 6], # Mariane (Sab, Dom)
@@ -69,19 +69,28 @@ def identificar_turno_atual(agora):
     else:
         return "Turno 3"
 
-def filtrar_quem_esta_de_folga(ids_do_turno, agora):
+def filtrar_quem_esta_de_folga(ids_do_turno, agora, turno_atual):
     """Remove da lista de IDs quem tem folga no dia da semana atual."""
-    dia_semana_hoje = agora.weekday() # 0=Segunda ... 6=Domingo
-    ids_validos = []
     
+    # Lógica de Madrugada para T3:
+    # Se for T3 e estiver entre 00h e 06h, o turno pertence ao dia anterior.
+    # Ex: Domingo 03:00am -> Verifica a folga de Sábado.
+    data_referencia = agora
+    if turno_atual == "Turno 3" and agora.hour < 6:
+        data_referencia = agora - timedelta(days=1)
+        print("🌙 Madrugada T3: Verificando escala baseada no dia anterior (Início do Turno).")
+    
+    dia_semana_referencia = data_referencia.weekday() # 0=Segunda ... 6=Domingo
+    
+    ids_validos = []
     nomes_dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
-    print(f"📅 Hoje é {nomes_dias[dia_semana_hoje]}. Verificando escalas...")
+    print(f"📅 Dia de referência para escala: {nomes_dias[dia_semana_referencia]}.")
 
     for uid in ids_do_turno:
         dias_off_da_pessoa = DIAS_DE_FOLGA.get(uid, [])
         
-        if dia_semana_hoje in dias_off_da_pessoa:
-            print(f"🏖️ ID {uid} está de folga hoje. Não será marcado.")
+        if dia_semana_referencia in dias_off_da_pessoa:
+            print(f"🏖️ ID {uid} está de folga (ref: {nomes_dias[dia_semana_referencia]}). Não será marcado.")
         else:
             ids_validos.append(uid)
             
@@ -103,7 +112,7 @@ def autenticar_google():
         return None
 
 def formatar_doca(doca):
-    doca = doca.strip()
+    doca = str(doca).strip()
     if not doca or doca == '-': return "Doca --"
     elif doca.startswith("EXT.OUT"):
         numeros = ''.join(filter(str.isdigit, doca))
@@ -186,6 +195,12 @@ def montar_mensagem_alerta(df_filtrado, agora):
 
 def enviar_imagem(webhook_url: str, caminho_imagem: str = CAMINHO_IMAGEM):
     if not webhook_url: return False
+    
+    # Verifica se o arquivo de imagem existe antes de tentar abrir
+    if not os.path.exists(caminho_imagem):
+        print(f"⚠️ Aviso: Imagem '{caminho_imagem}' não encontrada localmente. Ignorando envio de imagem.")
+        return False
+
     try:
         with open(caminho_imagem, "rb") as f:
             raw_image_content = f.read()
@@ -219,7 +234,7 @@ def main():
     spreadsheet_id = os.environ.get('SPREADSHEET_ID')
 
     if not webhook_url or not spreadsheet_id:
-        print("❌ Variáveis de ambiente faltando.")
+        print("❌ Variáveis de ambiente 'SEATALK_WEBHOOK_URL' ou 'SPREADSHEET_ID' faltando.")
         return
 
     cliente = autenticar_google()
@@ -254,7 +269,11 @@ def main():
             eta_datetime = FUSO_HORARIO_SP.localize(eta_naive)
             
             if eta_datetime <= limite_alerta:
-                df_filtrado_lista.append(row)
+                # Adiciona o datetime ao objeto row para ordenar depois
+                row_copy = row.copy()
+                row_copy['_sort_datetime'] = eta_datetime
+                df_filtrado_lista.append(row_copy)
+
         except ValueError:
             print(f"⚠️ Data inválida na linha {index}: '{eta_str}'")
     
@@ -262,7 +281,10 @@ def main():
         print("✅ Nenhuma LT urgente encontrada.")
         return
     
+    # Cria DataFrame e Ordena por Data (Menor data = Mais urgente = Primeiro)
     df_filtrado = pd.DataFrame(df_filtrado_lista)
+    df_filtrado = df_filtrado.sort_values(by='_sort_datetime', ascending=True)
+
     mensagem = montar_mensagem_alerta(df_filtrado, agora) 
 
     if mensagem:
@@ -270,7 +292,8 @@ def main():
         ids_brutos = TURNO_PARA_IDS.get(turno_atual, [])
 
         # --- APLICA FILTRO DE FOLGAS ---
-        ids_para_marcar = filtrar_quem_esta_de_folga(ids_brutos, agora)
+        # Agora passamos 'turno_atual' para usar a lógica de madrugada se necessário
+        ids_para_marcar = filtrar_quem_esta_de_folga(ids_brutos, agora, turno_atual)
         # -------------------------------
 
         print(f"🕒 Turno: {turno_atual}")
