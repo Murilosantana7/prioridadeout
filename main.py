@@ -29,7 +29,8 @@ TURNO_PARA_IDS = {
         "9260655622",  # Mariane Marquezini
         "1311194991",  # Cinara Lopes
         "1386559133",  # Murilo Santana
-        "1298055860"   # Matheus Damas
+        "1298055860",  # Matheus Damas
+        "1432898616"   # Leonardo Caus
     ],
     "Turno 3": [
         "1210347148",  # Danilo Pereira
@@ -45,13 +46,14 @@ DIAS_DE_FOLGA = {
     "1323672252": [6, 0], # Leticia (Dom, Seg)
     "9465967606": [5, 6], # Fidel (Sab, Dom)
     "1268695707": [6],    # Claudio (Dom)
-    "1361341535": [6, 0], # Iran (Dom, Seg)
+    "1361341535": [6, 0],  # Iran (Dom, Seg)
 
     # Turno 2
     "9260655622": [5, 6], # Mariane (Sab, Dom)
     "1311194991": [6, 0], # Cinara (Dom, Seg)
     "1386559133": [6, 0], # Murilo (Dom, Seg)
     "1298055860": [6],    # Matheus (Dom)
+    "1432898616": [0, 1, 2, 3, 4, 5], # Leonardo Caus
 
     # Turno 3
     "1210347148": [5, 6],  # Danilo (Sab, Dom)
