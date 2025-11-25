@@ -48,14 +48,14 @@ DIAS_DE_FOLGA = {
     "9465967606": [5, 6], # Fidel (Sab, Dom)
     "1268695707": [6],    # Claudio (Dom)
     "1361341535": [6, 0], # Iran (Dom, Seg)
-    "1285879030": [6, 0],  # Priscila Cristofaro
+    "1285879030": [6, 0],  # Priscila Cristofaro (Dom, Seg)
 
     # Turno 2
     "9260655622": [5, 6], # Mariane (Sab, Dom)
     "1311194991": [6, 0], # Cinara (Dom, Seg)
     "1386559133": [6, 0], # Murilo (Dom, Seg)
+    "1432898616": [0, 1, 2, 3, 4, 5], # Leonardo Caus ( seg, ter, qua, qui, sex, sáb)
     "1298055860": [6],    # Matheus (Dom)
-    "1432898616": [0, 1, 2, 3, 4], # Leonardo Caus ( seg, ter, qua, qui, sex)
 
     # Turno 3
     "1210347148": [5, 6],  # Danilo (Sab, Dom)
