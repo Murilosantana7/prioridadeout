@@ -21,19 +21,49 @@ FUSO_HORARIO_SP = timezone('America/Sao_Paulo')
 
 # --- CONFIGURAÇÃO DE TURNOS E IDS ---
 TURNO_PARA_IDS = {
-    "Turno 1": ["1361341535", "1269340883", "1323672252", "9465967606", "1268695707"],
-    "Turno 2": ["9260655622", "1311194991", "1386559133", "1298055860", "1445507591", "1432898616"],
-    "Turno 3": ["1210347148", "9474534910", "1499919880"]
+    "Turno 1": [
+        "1361341535", # Leticia Tena
+        "1269340883", # Priscila Cristofaro
+        "1323672252", # Leticia Tena
+        "9465967606", # Fidel Lúcio
+        "1268695707", # Claudio Olivatto
+    ],
+    "Turno 2": [
+        "9260655622", # Mariane Marquezini
+        "1311194991", # Cinara Lopes
+        "1386559133", # Murilo Santana
+        "1298055860", # Matheus Damas
+        "1445507591", # Amanda Silva
+        "1432898616", # Leonardo Caus
+    ],
+    "Turno 3": [
+        "1210347148", # Danilo Pereira
+        "9474534910", # Kaio Baldo
+        "1499919880", # Sandor Nemes
+    ]
 }
 
 # --- CONFIGURAÇÃO DE FOLGAS ---
 DIAS_DE_FOLGA = {
-    "1323672252": [6, 0], "9465967606": [5, 6], "1268695707": [6],
-    "1361341535": [6, 0], "1269340883": [6, 0], "9260655622": [5, 6],
-    "1311194991": [6, 0], "1386559133": [6, 0], "1432898616": [1, 2, 3, 4, 5],
-    "1298055860": [6], "1210347148": [5, 6], "9474534910": [6, 0],
-    "1499919880": [6],
-    "1445507591": [6]
+    # TURNO 1
+    "1323672252": [6, 0], # Leticia Tena
+    "9465967606": [5, 6], # Fidel Lúcio
+    "1268695707": [6],    # Claudio Olivatto
+    "1361341535": [6, 0], # Leticia Tena
+    "1269340883": [6, 0], # Priscila Cristofaro
+    
+    # TURNO 2
+    "9260655622": [5, 6],          # Mariane Marquezini
+    "1311194991": [6, 0],          # Cinara Lopes
+    "1386559133": [6, 0],          # Murilo Santana
+    "1432898616": [1, 2, 3, 4, 5], # Leonardo Caus
+    "1298055860": [6],             # Matheus Damas
+    "1445507591": [6],             # Amanda Silva
+    
+    # TURNO 3
+    "1210347148": [5, 6], # Danilo Pereira
+    "9474534910": [6, 0], # Kaio Baldo
+    "1499919880": [6],    # Sandor Nemes
 }
 
 def identificar_turno_atual(agora):
