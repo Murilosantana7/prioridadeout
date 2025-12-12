@@ -13,7 +13,7 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 # ATENÇÃO: Verifique se o nome da ABA lá embaixo na planilha é esse mesmo.
 # O nome do ARQUIVO é "Inbound SP5", mas a aba (tab) tem que ser essa:
 NOME_ABA = 'Reporte prioridade' 
-INTERVALO = 'A:F' # Baseado na imagem vai de A até F
+INTERVALO = 'A:F' 
 CAMINHO_IMAGEM = "alerta.gif"
 
 # --- FUSO HORÁRIO ---
@@ -53,12 +53,12 @@ DIAS_DE_FOLGA = {
     "1269340883": [6, 0], # Priscila Cristofaro
     
     # TURNO 2
-    "9260655622": [5, 6],          # Mariane Marquezini
-    "1311194991": [6, 0],          # Cinara Lopes
-    "1386559133": [6, 0],          # Murilo Santana
+    "9260655622": [5, 6],           # Mariane Marquezini
+    "1311194991": [6, 0],           # Cinara Lopes
+    "1386559133": [6, 0],           # Murilo Santana
     "1432898616": [1, 2, 3, 4, 5], # Leonardo Caus
-    "1298055860": [6],             # Matheus Damas
-    "1445507591": [6],             # Amanda Silva
+    "1298055860": [6],              # Matheus Damas
+    "1445507591": [6],              # Amanda Silva
     
     # TURNO 3
     "1210347148": [5, 6], # Danilo Pereira
@@ -87,15 +87,35 @@ def filtrar_quem_esta_de_folga(ids_do_turno, agora, turno_atual):
     return ids_validos
 
 def autenticar_google():
+    """
+    Autentica no Google Sheets tentando ler o JSON direto
+    OU decodificando Base64 (para compatibilidade com GitHub Actions).
+    """
     creds_json_str = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+    
     if not creds_json_str:
         print("❌ Erro: Variável 'GOOGLE_SERVICE_ACCOUNT_JSON' ausente.")
         return None
+
     try:
+        # TENTATIVA 1: Tenta ler direto (caso o segredo seja o JSON puro)
         creds_dict = json.loads(creds_json_str)
+    except json.JSONDecodeError:
+        # TENTATIVA 2: Se falhar, assume que está em Base64 e tenta decodificar
+        try:
+            print("⚠️ JSON direto falhou, tentando decodificar Base64...")
+            # Decodifica de Base64 para bytes e depois para string UTF-8
+            decoded_bytes = base64.b64decode(creds_json_str)
+            decoded_str = decoded_bytes.decode("utf-8")
+            creds_dict = json.loads(decoded_str)
+        except Exception as e_b64:
+            print(f"❌ Falha total na leitura das credenciais (Nem JSON, nem Base64): {e_b64}")
+            return None
+
+    try:
         return gspread.service_account_from_dict(creds_dict, scopes=SCOPES)
     except Exception as e:
-        print(f"❌ Erro auth: {e}")
+        print(f"❌ Erro ao autenticar no gspread: {e}")
         return None
 
 def formatar_doca(doca):
