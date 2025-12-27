@@ -56,7 +56,7 @@ DIAS_DE_FOLGA = {
     # TURNO 2
     "9260655622": [5, 6],           # Mariane Marquezini
     "1311194991": [6, 0],           # Cinara Lopes
-    "1525204706", [6, 0],           # Alyson Caetano
+    "1525204706": [6, 0],           # Alyson Caetano
     "1386559133": [6, 0],           # Murilo Santana
     "1432898616": [1, 2, 3, 4, 5],  # Leonardo Caus
     "1298055860": [6],              # Matheus Damas
