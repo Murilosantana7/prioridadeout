@@ -33,7 +33,7 @@ TURNO_PARA_IDS = {
         "1525204706", # Alyson Caetano
         "1311194991", # Cinara Lopes
         "1386559133", # Murilo Santana
-        "1164375437", # Matheus Damas
+        "1298055860", # Matheus Damas
         "1445507591", # Amanda Silva
         "1432898616", # Leonardo Caus
     ],
