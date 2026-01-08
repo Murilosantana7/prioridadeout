@@ -26,7 +26,7 @@ TURNO_PARA_IDS = {
         "1269340883", # Priscila Cristofaro
         "1323672252", # Leticia Tena
         "9465967606", # Fidel Lúcio
-        "1268695707", # Claudio Olivatto
+        "1521007245", # Claudio Olivatto alterado para Tereza até o Clauido voltar de férias
     ],
     "Turno 2": [
         "9382566974", # Eugênio Galvão
@@ -49,7 +49,7 @@ DIAS_DE_FOLGA = {
     # TURNO 1
     "1323672252": [6, 0], # Leticia Tena
     "9465967606": [5, 6], # Fidel Lúcio
-    "1268695707": [6],    # Claudio Olivatto
+    "1521007245": [6],    # Claudio Olivatto
     "1361341535": [6, 0], # Leticia Tena
     "1269340883": [6, 0], # Priscila Cristofaro
     
