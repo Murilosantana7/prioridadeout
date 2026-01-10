@@ -31,7 +31,7 @@ TURNO_PARA_IDS = {
     "Turno 2": [
         "9382566974", # Eugênio Galvão
         "1525204706", # Alyson Caetano
-        "1311194991", # Cinara Lopes
+        "", # Cinara Lopes
         "1386559133", # Murilo Santana
         "1298055860", # Matheus Damas
         "1445507591", # Amanda Silva
@@ -54,7 +54,7 @@ DIAS_DE_FOLGA = {
     "1269340883": [6, 0], # Priscila Cristofaro
     
     # TURNO 2
-    "9382566974": [5, 6],           # Mariane Marquezini
+    "9382566974": [6, 0],           # Eugênio
     "1311194991": [6, 0],           # Cinara Lopes
     "1525204706": [6, 0],           # Alyson Caetano
     "1386559133": [6, 0],           # Murilo Santana
