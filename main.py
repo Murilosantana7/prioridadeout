@@ -30,7 +30,7 @@ TURNO_PARA_IDS = {
     ],
     "Turno 2": [
         "9382566974", # Eugênio Galvão
-        "1525204706", # Alyson Caetano
+        "", # Alyson Caetano
         "", # Cinara Lopes
         "9474534910", # Murilo Santana Kaio cobrindo T2
         "1298055860", # Matheus Damas
