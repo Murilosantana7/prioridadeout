@@ -26,15 +26,13 @@ TURNO_PARA_IDS = {
         "1269340883", # Priscila Cristofaro
         "1323672252", # Leticia Tena
         "9465967606", # Fidel Lúcio
-        "1521007245", # Claudio Olivatto alterado para Tereza até o Clauido voltar de férias
+        "1268695707", # Claudio Olivatto
     ],
     "Turno 2": [
         "9382566974", # Eugênio Galvão
-        "", # Alyson Caetano
         "", # Cinara Lopes
         "9474534910", # Murilo Santana Kaio cobrindo T2
         "1298055860", # Matheus Damas
-        "", # Amanda Silva
         "1432898616", # Leonardo Caus
     ],
     "Turno 3": [
@@ -49,18 +47,16 @@ DIAS_DE_FOLGA = {
     # TURNO 1
     "1323672252": [6, 0], # Leticia Tena
     "9465967606": [5, 6], # Fidel Lúcio
-    "1521007245": [6],    # Claudio Olivatto
+    "1268695707": [6],    # Claudio Olivatto
     "1361341535": [6, 0], # Leticia Tena
     "1269340883": [6, 0], # Priscila Cristofaro
     
     # TURNO 2
     "9382566974": [6, 0],           # Eugênio
     "1311194991": [6, 0],           # Cinara Lopes
-    "1525204706": [6, 0],           # Alyson Caetano
     "1386559133": [6, 0],           # Murilo Santana
     "1432898616": [1, 2, 3, 4, 5],  # Leonardo Caus
     "1298055860": [6],              # Matheus Damas
-    "1445507591": [6],              # Amanda Silva
     
     # TURNO 3
     "1210347148": [5, 6], # Danilo Pereira
