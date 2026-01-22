@@ -25,7 +25,7 @@ TURNO_PARA_IDS = {
         "1361341535", # Leticia Tena
         "1269340883", # Priscila Cristofaro
         "1323672252", # Leticia Tena
-        "9465967606", # Fidel Lúcio
+        #"9465967606", # Fidel Lúcio
         "1268695707", # Claudio Olivatto
     ],
     "Turno 2": [
