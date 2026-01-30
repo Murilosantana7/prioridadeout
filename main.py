@@ -30,7 +30,6 @@ TURNO_PARA_IDS = {
     ],
     "Turno 2": [
         "9382566974", # Eugênio Galvão
-        "1311194991", # Cinara Lopes
         "9474534910", # Murilo Santana Kaio cobrindo T2
         "1298055860", # Matheus Damas
         "1432898616", # Leonardo Caus
@@ -53,7 +52,6 @@ DIAS_DE_FOLGA = {
     
     # TURNO 2
     "9382566974": [6, 0],           # Eugênio
-    "1311194991": [6, 0],           # Cinara Lopes
     "1386559133": [6, 0],           # Murilo Santana
     "1432898616": [1, 2, 3, 4, 5],  # Leonardo Caus
     "1298055860": [6],              # Matheus Damas
