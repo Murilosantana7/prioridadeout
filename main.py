@@ -30,13 +30,13 @@ TURNO_PARA_IDS = {
     ],
     "Turno 2": [
         "9382566974", # Eugênio Galvão
-        "9474534910", # Murilo Santana Kaio cobrindo T2
+        "1386559133", # Murilo Santana
         "1298055860", # Matheus Damas
         "1432898616", # Leonardo Caus
     ],
     "Turno 3": [
         "1210347148", # Danilo Pereira
-        "9382243574", # Kaio Baldo Joao cobrindo T3
+        "9474534910", # Kaio Baldo Joao cobrindo T3
         "1499919880", # Sandor Nemes
     ]
 }
